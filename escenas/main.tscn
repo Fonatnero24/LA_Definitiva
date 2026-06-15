@@ -1,0 +1,45 @@
+[gd_scene load_steps=8 format=3 uid="uid://tymvkh07osg7"]
+
+[ext_resource type="Script" uid="uid://xu1lvuaty140" path="res://Scripts/main.gd" id="1_a8p2b"]
+[ext_resource type="Script" uid="uid://cnkxqxdciyk74" path="res://Scripts/inventario_ui.gd" id="2_jumxm"]
+[ext_resource type="Script" uid="uid://cmbhc2oo2q06a" path="res://Scripts/sistema_cofres.gd" id="3_26pgj"]
+[ext_resource type="Script" uid="uid://ra5m2gcuik4w" path="res://Scripts/forja_ui.gd" id="4_26pgj"]
+[ext_resource type="Script" uid="uid://bjcwe4v5r87kr" path="res://Scripts/mapa_mundos_ui.gd" id="5_a8p2b"]
+[ext_resource type="Script" uid="uid://c7apnyjdkcpvi" path="res://Scripts/arbol_habilidades_ui.gd" id="5_dkga6"]
+[ext_resource type="Script" uid="uid://bce2f4puuyws5" path="res://Scripts/tienda_ui.gd" id="7_o8odp"]
+
+[node name="Main" type="Control"]
+layout_mode = 3
+anchors_preset = 0
+script = ExtResource("1_a8p2b")
+
+[node name="InventarioUI" type="Control" parent="."]
+anchors_preset = 0
+offset_right = 40.0
+offset_bottom = 40.0
+script = ExtResource("2_jumxm")
+
+[node name="SistemaCofres" type="Node" parent="."]
+script = ExtResource("3_26pgj")
+
+[node name="ForjaUI" type="Control" parent="."]
+anchors_preset = 0
+offset_right = 40.0
+offset_bottom = 40.0
+script = ExtResource("4_26pgj")
+
+[node name="ArbolHabilidadesUI" type="Control" parent="."]
+anchors_preset = 0
+script = ExtResource("5_dkga6")
+
+[node name="MapaMundosUI" type="Control" parent="."]
+anchors_preset = 0
+offset_right = 40.0
+offset_bottom = 40.0
+script = ExtResource("5_a8p2b")
+
+[node name="TiendaUI" type="Control" parent="."]
+anchors_preset = 0
+offset_right = 40.0
+offset_bottom = 40.0
+script = ExtResource("7_o8odp")

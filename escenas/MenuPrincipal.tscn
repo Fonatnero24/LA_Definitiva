@@ -1,0 +1,17 @@
+[gd_scene load_steps=2 format=3 uid="uid://b4fs1hv78xlyx"]
+
+[ext_resource type="Script" uid="uid://c1kr1ii5byh7s" path="res://Scripts/menu_principal.gd" id="1_7pspv"]
+
+[node name="MenuPrincipal" type="Control"]
+layout_mode = 3
+anchors_preset = 0
+script = ExtResource("1_7pspv")
+
+[node name="Fondo" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.0313726, 0.0431373, 0.0705882, 0.4)

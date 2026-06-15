@@ -1,0 +1,8 @@
+[gd_scene load_steps=2 format=3 uid="uid://ceul2mrhp55ec"]
+
+[ext_resource type="Script" uid="uid://c8tnxhom8o0cn" path="res://Scripts/seleccion_aventura.gd" id="1_npust"]
+
+[node name="SeleccionPersonaje" type="Control"]
+layout_mode = 3
+anchors_preset = 0
+script = ExtResource("1_npust")

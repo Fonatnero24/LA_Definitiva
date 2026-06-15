@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://c4rcb1ih6a4gp"]
+
+[ext_resource type="Script" uid="uid://bjcwe4v5r87kr" path="res://Scripts/mapa_mundos_ui.gd" id="1_atlas"]
+
+[node name="MapaMundosUI" type="Node"]
+script = ExtResource("1_atlas")
