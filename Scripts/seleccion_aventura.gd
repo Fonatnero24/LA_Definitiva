@@ -2248,7 +2248,7 @@ func _add_corner_ornaments(
 			"size": Vector2(2.0, 34.0)
 		}
 	]
-
+ 
 	for piece_data in pieces:
 		_create_color_rect(
 			parent,
