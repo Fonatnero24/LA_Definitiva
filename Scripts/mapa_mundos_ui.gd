@@ -34,6 +34,7 @@ var action_button: Button
 var difficulty_buttons: Dictionary = {}
 var zone_buttons: Dictionary = {}
 
+
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	main_controller = get_parent()
