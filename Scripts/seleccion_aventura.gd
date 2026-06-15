@@ -2261,6 +2261,9 @@ func _add_corner_ornaments(
 				0.94
 			)
 		)
+  
+
+
 
 func _create_stars(value: int) -> String:
 	var result: String = ""
