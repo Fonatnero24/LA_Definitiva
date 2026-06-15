@@ -378,6 +378,7 @@ func _looks_like_heading(text: String) -> bool:
 
 	return has_letter and text == text.to_upper()
 
+
 func _is_symbol_control(control: Control) -> bool:
 	var visible_text: String = _get_visible_text(control)
 	if visible_text.is_empty() or visible_text.length() > 6:
