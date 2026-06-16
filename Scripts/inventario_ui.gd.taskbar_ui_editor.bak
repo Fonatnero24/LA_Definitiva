@@ -1242,8 +1242,8 @@ func _build_titles() -> void:
 	inventory_title_label = _create_label(
 		menu_canvas,
 		_inv_text("inventory_title"),
-		Vector2(830, 34),
-		Vector2(672, 62),
+		Vector2(500.0, 48.0),
+		Vector2(672.0, 62.0),
 		42,
 		HORIZONTAL_ALIGNMENT_CENTER,
 		Color("#F4D47A")
@@ -1257,8 +1257,8 @@ func _build_titles() -> void:
 	inventory_subtitle_label = _create_label(
 		menu_canvas,
 		_inv_text("inventory_subtitle"),
-		Vector2(613, 130),
-		Vector2(592, 30),
+		Vector2(540.0, 104.0),
+		Vector2(592.0, 30.0),
 		18,
 		HORIZONTAL_ALIGNMENT_CENTER,
 		Color("#9DD7FF")
@@ -1295,8 +1295,8 @@ func _build_character_roster_slots() -> void:
 	var roster_title := _create_label(
 		menu_canvas,
 		"CAMPEONES" if current_language == "es" else "CHAMPIONS",
-		Vector2(268, 86),
-		Vector2(300, 26),
+		Vector2(278.0, 96.0),
+		Vector2(300.0, 26.0),
 		13,
 		HORIZONTAL_ALIGNMENT_CENTER,
 		Color("#F3D77A")
@@ -1306,9 +1306,9 @@ func _build_character_roster_slots() -> void:
 	roster_title.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.92))
 
 	var positions: Array[Vector2] = [
-		Vector2(272, 118),
-		Vector2(370, 118),
-		Vector2(462, 120)
+		Vector2(282.0, 124.0),
+		Vector2(382.0, 124.0),
+		Vector2(482.0, 124.0)
 	]
 	for index in range(3):
 		var button := Button.new()
@@ -1373,8 +1373,8 @@ func _build_stats_panel() -> void:
 	attributes_title_label = _create_label(
 		menu_canvas,
 		_inv_text("attributes"),
-		Vector2(225, 664),
-		Vector2(350, 30),
+		Vector2(245.0, 648.0),
+		Vector2(350.0, 30.0),
 		18,
 		HORIZONTAL_ALIGNMENT_CENTER,
 		Color("#F0C965")
@@ -1382,8 +1382,8 @@ func _build_stats_panel() -> void:
 	character_progress_label = _create_label(
 		menu_canvas,
 		"",
-		Vector2(233, 858),
-		Vector2(350, 28),
+		Vector2(245.0, 842.0),
+		Vector2(350.0, 28.0),
 		14,
 		HORIZONTAL_ALIGNMENT_CENTER,
 		Color("#9FD9FF")
@@ -2210,12 +2210,12 @@ func _build_skill_panel() -> void:
 	background.add_theme_stylebox_override("panel", _make_style(Color(0.004,0.012,0.020,0.88), Color(0.75,0.55,0.18,0.65), 2, 8))
 	skill_panel.add_child(background)
 
-	skill_title_label = _create_label(skill_panel, _inv_text("skills_title"), Vector2(26, -6), Vector2(699, 34), 22, HORIZONTAL_ALIGNMENT_CENTER, Color("#F4D47A"))
+	skill_title_label = _create_label(skill_panel, _inv_text("skills_title"), Vector2(18, 10), Vector2(699, 34), 22, HORIZONTAL_ALIGNMENT_CENTER, Color("#F4D47A"))
 	skill_hint_label = _create_label(skill_panel, _inv_text("skills_hint"), Vector2(28, 44), Vector2(679, 46), 14, HORIZONTAL_ALIGNMENT_CENTER, Color("#C6D6E8"))
 	skill_hint_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	active_skill_title_label = _create_label(skill_panel, _inv_text("active_skills"), Vector2(24, 100), Vector2(300, 28), 16, HORIZONTAL_ALIGNMENT_CENTER, Color("#FFCF6A"))
 	passive_skill_title_label = _create_label(skill_panel, _inv_text("passive_skills"), Vector2(24, 260), Vector2(300, 28), 16, HORIZONTAL_ALIGNMENT_CENTER, Color("#79E8C1"))
-	available_skill_title_label = _create_label(skill_panel, _inv_text("available_skills"), Vector2(279, 173), Vector2(360, 28), 16, HORIZONTAL_ALIGNMENT_CENTER, Color("#D6B0FF"))
+	available_skill_title_label = _create_label(skill_panel, _inv_text("available_skills"), Vector2(350, 100), Vector2(360, 28), 16, HORIZONTAL_ALIGNMENT_CENTER, Color("#D6B0FF"))
 
 	active_skill_slot_buttons.clear()
 	for index: int in range(SistemaHabilidadesEquipables.MAX_ACTIVE_SLOTS):

@@ -751,8 +751,8 @@ func _build_header() -> void:
 	title_label = _create_label(
 		menu_canvas,
 		_text("title"),
-		Vector2(699, 170),
-		Vector2(746, 35),
+		Vector2(670.0, 170.0),
+		Vector2(790.0, 42.0),
 		28,
 		HORIZONTAL_ALIGNMENT_CENTER,
 		Color("#F3CE72")
@@ -766,8 +766,8 @@ func _build_header() -> void:
 	description_label = _create_label(
 		menu_canvas,
 		_text("description"),
-		Vector2(703, 206),
-		Vector2(742, 28),
+		Vector2(690.0, 211.0),
+		Vector2(750.0, 45.0),
 		15,
 		HORIZONTAL_ALIGNMENT_CENTER,
 		Color("#D8D0C2")
@@ -806,8 +806,8 @@ func _build_bottom_controls() -> void:
 	status_label = _create_label(
 		menu_canvas,
 		"",
-		Vector2(692, 716),
-		Vector2(765, 33),
+		Vector2(675.0, 710.0),
+		Vector2(780.0, 42.0),
 		14,
 		HORIZONTAL_ALIGNMENT_CENTER,
 		Color("#E9E0D2")
@@ -836,8 +836,8 @@ func _build_close_button() -> void:
 	close_button = Button.new()
 	close_button.name = "CerrarForja"
 	close_button.text = "×"
-	close_button.position = Vector2(1493, 133)
-	close_button.size = Vector2(42, 42)
+	close_button.position = Vector2(1510.0, 104.0)
+	close_button.size = Vector2(42.0, 42.0)
 	close_button.focus_mode = Control.FOCUS_NONE
 	close_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	close_button.tooltip_text = _text("close")
@@ -871,8 +871,8 @@ func _open_item_selector(slot_index: int) -> void:
 
 	selector_panel = Panel.new()
 	selector_panel.name = "SelectorObjetos"
-	selector_panel.position = Vector2(656, 270)
-	selector_panel.size = Vector2(860, 440)
+	selector_panel.position = Vector2(650.0, 270.0)
+	selector_panel.size = Vector2(860.0, 440.0)
 	selector_panel.z_index = 80
 	selector_panel.mouse_filter = Control.MOUSE_FILTER_STOP
 	selector_panel.add_theme_stylebox_override(
@@ -891,8 +891,8 @@ func _open_item_selector(slot_index: int) -> void:
 	var selector_title: Label = _create_label(
 		selector_panel,
 		_text("selector_title"),
-		Vector2(634, 717),
-		Vector2(690, 34),
+		Vector2(32.0, 18.0),
+		Vector2(690.0, 34.0),
 		23,
 		HORIZONTAL_ALIGNMENT_LEFT,
 		Color("#F3CE72")
@@ -920,8 +920,8 @@ func _open_item_selector(slot_index: int) -> void:
 	selector_close.pressed.connect(_close_selector)
 
 	var scroll: ScrollContainer = ScrollContainer.new()
-	scroll.position = Vector2(112, 110)
-	scroll.size = Vector2(808, 320)
+	scroll.position = Vector2(26.0, 92.0)
+	scroll.size = Vector2(808.0, 320.0)
 	selector_panel.add_child(scroll)
 
 	selector_list = VBoxContainer.new()

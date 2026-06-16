@@ -32,7 +32,7 @@ version_control/autoload_on_startup=true
 
 [editor_plugins]
 
-enabled=PackedStringArray()
+enabled=PackedStringArray("res://addons/taskbar_ui_editor/plugin.cfg")
 
 [rendering]
 
