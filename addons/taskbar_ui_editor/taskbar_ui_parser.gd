@@ -3,6 +3,7 @@ extends RefCounted
 
 const VisualAnalyzer = preload("res://addons/taskbar_ui_editor/taskbar_ui_visual_analyzer.gd")
 const DynamicAnalyzer = preload("res://addons/taskbar_ui_editor/taskbar_ui_dynamic_analyzer.gd")
+const BlueprintAnalyzer = preload("res://addons/taskbar_ui_editor/taskbar_ui_blueprint_analyzer.gd")
 
 const IMAGE_EXTENSIONS: Array[String] = ["png", "jpg", "jpeg", "webp", "svg"]
 const PROJECT_FONT_CANDIDATES: Array[String] = [
@@ -206,6 +207,13 @@ static func parse_source(path: String, source: String) -> Dictionary:
 	result["canvas_size"] = dynamic_data.get(
 		"canvas_size", result.get("canvas_size", Vector2(900.0, 240.0))
 	)
+	var blueprint_data: Dictionary = BlueprintAnalyzer.apply(
+		path, source, elements, images, result.get("canvas_size", Vector2(900.0, 240.0))
+	)
+	elements = blueprint_data.get("elements", elements)
+	result["canvas_size"] = blueprint_data.get(
+		"canvas_size", result.get("canvas_size", Vector2(900.0, 240.0))
+	)
 	result["canvas_color"] = visual_data.get("canvas_color", Color(0.008, 0.012, 0.018, 1.0))
 	result["detected_colors"] = int(visual_data.get("detected_colors", 0))
 	var styled_count: int = 0
@@ -221,14 +229,24 @@ static func parse_source(path: String, source: String) -> Dictionary:
 		):
 			styled_count += 1
 	result["styled_elements"] = styled_count
-	result["views"] = dynamic_data.get("views", [])
-	result["default_view"] = str(dynamic_data.get("default_view", "all"))
+	var blueprint_views: Array = blueprint_data.get("views", [])
+	result["views"] = (
+		blueprint_views if not blueprint_views.is_empty() else dynamic_data.get("views", [])
+	)
+	var blueprint_default: String = str(blueprint_data.get("default_view", ""))
+	result["default_view"] = (
+		blueprint_default if not blueprint_default.is_empty() else str(dynamic_data.get("default_view", "all"))
+	)
 	result["elements"] = elements
 	result["images"] = images
+	var blueprint_background: String = str(blueprint_data.get("background_path", ""))
 	var dynamic_background: String = str(dynamic_data.get("background_path", ""))
-	result["background_path"] = (
-		dynamic_background if not dynamic_background.is_empty() else _choose_background_path(images)
-	)
+	if not blueprint_background.is_empty():
+		result["background_path"] = blueprint_background
+	elif not dynamic_background.is_empty():
+		result["background_path"] = dynamic_background
+	else:
+		result["background_path"] = _choose_background_path(images)
 	return result
 
 
@@ -1304,8 +1322,26 @@ static func build_replacements(elements: Array) -> Array:
 		if bool(element.get("runtime_only", false)):
 			continue
 		var rect: Rect2 = element.get("rect", Rect2())
+		var save_offset: Vector2 = element.get("save_offset", Vector2.ZERO)
+		if save_offset != Vector2.ZERO:
+			rect.position -= save_offset
 		var element_kind: String = str(element.get("kind", ""))
-		if element_kind == "rect2":
+		if element_kind == "scalar_position":
+			replacements.append(
+				{
+					"start": int(element.get("span_x_start", -1)),
+					"end": int(element.get("span_x_end", -1)),
+					"text": format_number(rect.position.x)
+				}
+			)
+			replacements.append(
+				{
+					"start": int(element.get("span_y_start", -1)),
+					"end": int(element.get("span_y_end", -1)),
+					"text": format_number(rect.position.y)
+				}
+			)
+		elif element_kind == "rect2":
 			replacements.append(
 				{
 					"start": int(element.get("span_a_start", -1)),
@@ -1343,6 +1379,17 @@ static func build_replacements(elements: Array) -> Array:
 						"Vector2(%s, %s)" % [format_number(rect.size.x), format_number(rect.size.y)]
 					}
 				)
+	var unique_replacements: Dictionary = {}
+	for raw_replacement: Variant in replacements:
+		if not (raw_replacement is Dictionary):
+			continue
+		var replacement: Dictionary = raw_replacement
+		var start_index: int = int(replacement.get("start", -1))
+		var end_index: int = int(replacement.get("end", -1))
+		if start_index < 0 or end_index <= start_index:
+			continue
+		unique_replacements["%d:%d" % [start_index, end_index]] = replacement
+	replacements = unique_replacements.values()
 	replacements.sort_custom(
 		func(a: Dictionary, b: Dictionary) -> bool:
 			return int(a.get("start", 0)) > int(b.get("start", 0))

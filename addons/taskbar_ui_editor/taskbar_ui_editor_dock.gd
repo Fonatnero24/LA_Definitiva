@@ -287,6 +287,7 @@ func _load_script(path: String) -> void:
 
 func _set_document(new_document: Dictionary) -> void:
 	document = new_document
+	_apply_forced_module_canvas()
 	selected_element = -1
 	element_list.clear()
 	var elements: Array = document.get("elements", [])
@@ -342,9 +343,14 @@ func _set_document(new_document: Dictionary) -> void:
 			)
 		)
 	var script_images: Array = document.get("images", [])
+	var script_path: String = str(document.get("path", ""))
 	var background_path: String = str(document.get("background_path", ""))
-	if background_path.is_empty():
-		background_path = _guess_project_background(str(document.get("path", "")))
+	if script_path.get_file().get_basename().to_lower().contains("tienda"):
+		var shop_background: String = _guess_project_background(script_path)
+		if not shop_background.is_empty():
+			background_path = shop_background
+	elif background_path.is_empty():
+		background_path = _guess_project_background(script_path)
 	_populate_view_picker()
 	preview.set_document(
 		document.get("canvas_size", Vector2(900.0, 240.0)),
@@ -375,6 +381,23 @@ func _set_document(new_document: Dictionary) -> void:
 	_clear_fields()
 
 
+func _apply_forced_module_canvas() -> void:
+	var path: String = str(document.get("path", ""))
+	var name: String = path.get_file().get_basename().to_lower()
+	if name.contains("tienda"):
+		document["canvas_size"] = Vector2(1448.0, 1086.0)
+	elif name.contains("forja"):
+		document["canvas_size"] = Vector2(1666.0, 922.0)
+	elif name.contains("inventario"):
+		document["canvas_size"] = Vector2(1672.0, 941.0)
+	elif name.contains("arbol") or name.contains("habilidad"):
+		document["canvas_size"] = Vector2(1448.0, 1086.0)
+	elif name.contains("menu_principal"):
+		document["canvas_size"] = Vector2(900.0, 600.0)
+	elif name == "main" or name.contains("mapa_mundos"):
+		document["canvas_size"] = Vector2(900.0, 240.0)
+
+
 func _populate_image_controls(background_path: String) -> void:
 	updating_image_controls = true
 	background_picker.clear()
@@ -384,6 +407,8 @@ func _populate_image_controls(background_path: String) -> void:
 	element_image_picker.add_item("Automática / sin imagen")
 	element_image_picker.set_item_metadata(0, "")
 	var paths: Array[String] = _get_relevant_images()
+	if not background_path.is_empty() and not paths.has(background_path):
+		paths.insert(0, background_path)
 	for path: String in paths:
 		var label: String = _image_display_name(path)
 		background_picker.add_item(label)
@@ -541,6 +566,15 @@ func _on_preview_selection_changed(index: int) -> void:
 
 
 func _select_element(index: int) -> void:
+	var elements: Array = document.get("elements", [])
+	if index >= 0 and index < elements.size() and elements[index] is Dictionary:
+		var driver_name: String = str((elements[index] as Dictionary).get("drag_driver", ""))
+		if not driver_name.is_empty():
+			var driver_index: int = _find_element_index(elements, driver_name)
+			if driver_index >= 0:
+				index = driver_index
+				if index < element_list.item_count:
+					element_list.select(index)
 	selected_element = index
 	preview.select_element(index)
 	if index < 0:
@@ -549,7 +583,6 @@ func _select_element(index: int) -> void:
 		element_image_picker.select(0)
 		updating_image_controls = false
 		return
-	var elements: Array = document.get("elements", [])
 	if index >= elements.size():
 		return
 	var element: Dictionary = elements[index]
@@ -557,9 +590,14 @@ func _select_element(index: int) -> void:
 	_update_fields(rect)
 	var is_runtime_only: bool = bool(element.get("runtime_only", false))
 	var is_editable: bool = bool(element.get("editable", not is_runtime_only))
-	_set_edit_fields_enabled(is_editable, bool(element.get("allow_resize", true)))
 	if is_runtime_only:
-		status_label.text = "Vista PLAY: este elemento se genera durante la ejecución y se muestra como referencia."
+		is_editable = true
+	var allow_resize: bool = bool(element.get("allow_resize", true))
+	if is_runtime_only and not element.has("allow_resize"):
+		allow_resize = false
+	_set_edit_fields_enabled(is_editable, allow_resize)
+	if is_runtime_only:
+		status_label.text = "Vista PLAY: puedes mover el elemento. Si está vinculado al código, se guardará en el script."
 	elif not is_editable:
 		status_label.text = "Elemento visual detectado automáticamente; no cambia las coordenadas del script."
 	var image_path: String = str(elements[index].get("image_path", ""))
@@ -629,6 +667,7 @@ func _on_preview_rect_changed(index: int, rect: Rect2, _finished: bool) -> void:
 		return
 	elements[index]["rect"] = rect
 	elements[index]["dirty"] = true
+	_sync_shared_axis_groups(elements, index, rect)
 	_sync_linked_elements(elements, str(elements[index].get("name", "")), rect)
 	document["elements"] = elements
 	selected_element = index
@@ -654,6 +693,7 @@ func _on_numeric_changed(_value: float) -> void:
 	)
 	elements[selected_element]["rect"] = rect
 	elements[selected_element]["dirty"] = true
+	_sync_shared_axis_groups(elements, selected_element, rect)
 	_sync_linked_elements(elements, str(elements[selected_element].get("name", "")), rect)
 	document["elements"] = elements
 	preview.queue_redraw()
@@ -737,6 +777,42 @@ func _apply_view_canvas_size(tag: String) -> void:
 			canvas_size = view.get("canvas_size", canvas_size)
 		break
 	preview.set_canvas_size(canvas_size)
+
+
+func _find_element_index(elements: Array, name: String) -> int:
+	for index: int in range(elements.size()):
+		if not (elements[index] is Dictionary):
+			continue
+		if str((elements[index] as Dictionary).get("name", "")) == name:
+			return index
+	return -1
+
+
+func _sync_shared_axis_groups(elements: Array, source_index: int, source_rect: Rect2) -> void:
+	if source_index < 0 or source_index >= elements.size():
+		return
+	if not (elements[source_index] is Dictionary):
+		return
+	var source: Dictionary = elements[source_index]
+	var shared_x_group: String = str(source.get("shared_x_group", ""))
+	var shared_y_group: String = str(source.get("shared_y_group", ""))
+	if shared_x_group.is_empty() and shared_y_group.is_empty():
+		return
+	for index: int in range(elements.size()):
+		if index == source_index or not (elements[index] is Dictionary):
+			continue
+		var element: Dictionary = elements[index]
+		var rect: Rect2 = element.get("rect", Rect2())
+		var changed: bool = false
+		if not shared_x_group.is_empty() and str(element.get("shared_x_group", "")) == shared_x_group:
+			rect.position.x = source_rect.position.x
+			changed = true
+		if not shared_y_group.is_empty() and str(element.get("shared_y_group", "")) == shared_y_group:
+			rect.position.y = source_rect.position.y
+			changed = true
+		if changed:
+			element["rect"] = rect
+			elements[index] = element
 
 
 func _sync_linked_elements(elements: Array, driver_name: String, driver_rect: Rect2) -> void:

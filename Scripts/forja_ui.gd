@@ -816,8 +816,8 @@ func _build_bottom_controls() -> void:
 
 	clear_button = _create_action_button(
 		_text("empty"),
-		Vector2(290.0, 803.0),
-		Vector2(260.0, 43.0),
+		Vector2(313, 805),
+		Vector2(260, 43),
 		Color("#1D2730"),
 		Color("#C79A43")
 	)
@@ -825,8 +825,8 @@ func _build_bottom_controls() -> void:
 
 	forge_button = _create_action_button(
 		_text("forge"),
-		Vector2(1108.0, 803.0),
-		Vector2(260.0, 43.0),
+		Vector2(1047, 805),
+		Vector2(260, 43),
 		Color("#4A1F08"),
 		Color("#FFB34D")
 	)

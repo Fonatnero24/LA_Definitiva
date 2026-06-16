@@ -643,6 +643,16 @@ func _gui_input(event: InputEvent) -> void:
 		_update_pointer_action(motion_event.position)
 
 
+func _can_move_element(element: Dictionary) -> bool:
+	if bool(element.get("movement_locked", false)):
+		return false
+	if bool(element.get("editable", true)):
+		return true
+	if show_runtime_preview and bool(element.get("runtime_only", false)):
+		return true
+	return false
+
+
 func _begin_pointer_action(mouse_position: Vector2) -> void:
 	var index: int = _hit_test(mouse_position)
 	if index < 0:
@@ -655,9 +665,11 @@ func _begin_pointer_action(mouse_position: Vector2) -> void:
 	var element: Dictionary = elements[index]
 	_drag_origin_rect = element.get("rect", Rect2())
 	_drag_origin_mouse = _screen_to_canvas(mouse_position)
-	var editable: bool = bool(element.get("editable", true))
+	var editable: bool = _can_move_element(element)
 	if editable:
 		var allow_resize: bool = bool(element.get("allow_resize", true))
+		if bool(element.get("runtime_only", false)) and not element.has("allow_resize"):
+			allow_resize = false
 		_resizing = allow_resize and _is_on_resize_handle(mouse_position, _drag_origin_rect)
 		_dragging = not _resizing
 	else:
@@ -694,25 +706,78 @@ func _update_pointer_action(mouse_position: Vector2) -> void:
 		rect.size.y = maxf(4.0, rect.size.y)
 	elements[selected_index]["rect"] = rect
 	elements[selected_index]["dirty"] = true
+	_sync_shared_axis_groups(selected_index, rect)
 	_sync_linked_elements(str(elements[selected_index].get("name", "")), rect)
 	element_rect_changed.emit(selected_index, rect, false)
 	queue_redraw()
 
 
 func _hit_test(mouse_position: Vector2) -> int:
+	var fallback_index: int = -1
 	for index: int in range(elements.size() - 1, -1, -1):
 		if not (elements[index] is Dictionary):
 			continue
-		var element: Dictionary = elements[index]
+		var element: Dictionary = elements[index] as Dictionary
 		if not _element_is_drawable(element):
 			continue
 		var rect: Rect2 = element.get("rect", Rect2())
 		var screen_rect: Rect2 = Rect2(
 			_view_offset + rect.position * _view_scale, rect.size * _view_scale
 		)
-		if screen_rect.has_point(mouse_position):
+		if not screen_rect.has_point(mouse_position):
+			continue
+		var target_index: int = index
+		var driver_name: String = str(element.get("drag_driver", ""))
+		if not driver_name.is_empty():
+			var driver_index: int = _find_element_index(driver_name)
+			if driver_index >= 0:
+				target_index = driver_index
+		if fallback_index < 0:
+			fallback_index = target_index
+		if target_index < 0 or target_index >= elements.size():
+			continue
+		if not (elements[target_index] is Dictionary):
+			continue
+		var target_element: Dictionary = elements[target_index] as Dictionary
+		if _can_move_element(target_element):
+			return target_index
+	return fallback_index
+
+
+func _find_element_index(name: String) -> int:
+	for index: int in range(elements.size()):
+		if not (elements[index] is Dictionary):
+			continue
+		if str((elements[index] as Dictionary).get("name", "")) == name:
 			return index
 	return -1
+
+
+func _sync_shared_axis_groups(source_index: int, source_rect: Rect2) -> void:
+	if source_index < 0 or source_index >= elements.size():
+		return
+	if not (elements[source_index] is Dictionary):
+		return
+	var source: Dictionary = elements[source_index]
+	var shared_x_group: String = str(source.get("shared_x_group", ""))
+	var shared_y_group: String = str(source.get("shared_y_group", ""))
+	if shared_x_group.is_empty() and shared_y_group.is_empty():
+		return
+	for index: int in range(elements.size()):
+		if index == source_index or not (elements[index] is Dictionary):
+			continue
+		var element: Dictionary = elements[index]
+		var rect: Rect2 = element.get("rect", Rect2())
+		var changed: bool = false
+		if not shared_x_group.is_empty() and str(element.get("shared_x_group", "")) == shared_x_group:
+			rect.position.x = source_rect.position.x
+			changed = true
+		if not shared_y_group.is_empty() and str(element.get("shared_y_group", "")) == shared_y_group:
+			rect.position.y = source_rect.position.y
+			changed = true
+		if changed:
+			element["rect"] = rect
+			elements[index] = element
 
 
 func _sync_linked_elements(driver_name: String, driver_rect: Rect2) -> void:

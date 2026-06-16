@@ -1267,8 +1267,8 @@ func _build_titles() -> void:
 func _build_character_preview() -> void:
 	character_preview = TextureRect.new()
 	character_preview.name = "PersonajeInventario"
-	character_preview.position = Vector2(260.0, 176.0)
-	character_preview.size = Vector2(330.0, 330.0)
+	character_preview.position = Vector2(243, 178)
+	character_preview.size = Vector2(330, 330)
 	character_preview.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	character_preview.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	character_preview.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
@@ -1373,7 +1373,7 @@ func _build_stats_panel() -> void:
 	attributes_title_label = _create_label(
 		menu_canvas,
 		_inv_text("attributes"),
-		Vector2(225, 664),
+		Vector2(228, 665),
 		Vector2(350, 30),
 		18,
 		HORIZONTAL_ALIGNMENT_CENTER,
@@ -1382,7 +1382,7 @@ func _build_stats_panel() -> void:
 	character_progress_label = _create_label(
 		menu_canvas,
 		"",
-		Vector2(233, 858),
+		Vector2(235, 861),
 		Vector2(350, 28),
 		14,
 		HORIZONTAL_ALIGNMENT_CENTER,
@@ -2210,8 +2210,8 @@ func _build_skill_panel() -> void:
 	background.add_theme_stylebox_override("panel", _make_style(Color(0.004,0.012,0.020,0.88), Color(0.75,0.55,0.18,0.65), 2, 8))
 	skill_panel.add_child(background)
 
-	skill_title_label = _create_label(skill_panel, _inv_text("skills_title"), Vector2(26, -6), Vector2(699, 34), 22, HORIZONTAL_ALIGNMENT_CENTER, Color("#F4D47A"))
-	skill_hint_label = _create_label(skill_panel, _inv_text("skills_hint"), Vector2(28, 44), Vector2(679, 46), 14, HORIZONTAL_ALIGNMENT_CENTER, Color("#C6D6E8"))
+	skill_title_label = _create_label(skill_panel, _inv_text("skills_title"), Vector2(52, 41), Vector2(699, 34), 22, HORIZONTAL_ALIGNMENT_CENTER, Color("#F4D47A"))
+	skill_hint_label = _create_label(skill_panel, _inv_text("skills_hint"), Vector2(89, 42), Vector2(679, 46), 14, HORIZONTAL_ALIGNMENT_CENTER, Color("#C6D6E8"))
 	skill_hint_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	active_skill_title_label = _create_label(skill_panel, _inv_text("active_skills"), Vector2(24, 100), Vector2(300, 28), 16, HORIZONTAL_ALIGNMENT_CENTER, Color("#FFCF6A"))
 	passive_skill_title_label = _create_label(skill_panel, _inv_text("passive_skills"), Vector2(24, 260), Vector2(300, 28), 16, HORIZONTAL_ALIGNMENT_CENTER, Color("#79E8C1"))
@@ -2227,7 +2227,7 @@ func _build_skill_panel() -> void:
 		passive_skill_slot_buttons.append(button)
 
 	var scroll: ScrollContainer = ScrollContainer.new()
-	scroll.position = Vector2(350, 136)
+	scroll.position = Vector2(383, 133)
 	scroll.size = Vector2(360, 342)
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	skill_panel.add_child(scroll)
