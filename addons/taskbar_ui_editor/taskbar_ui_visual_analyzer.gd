@@ -647,6 +647,10 @@ static func _apply_direct_visual_metadata(
 		elif vertical_expression.contains("CENTER"):
 			element["vertical_alignment"] = VERTICAL_ALIGNMENT_CENTER
 
+		var autowrap_expression: String = _property_expression(source, name, "autowrap_mode")
+		if not autowrap_expression.is_empty():
+			element["autowrap"] = not autowrap_expression.contains("AUTOWRAP_OFF")
+
 		var stretch_expression: String = _property_expression(source, name, "stretch_mode")
 		if stretch_expression.contains("KEEP_ASPECT_COVERED"):
 			element["image_mode"] = "cover"

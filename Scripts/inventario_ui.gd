@@ -101,9 +101,9 @@ const EQUIPMENT_SLOT_RECTS: Dictionary = {
 	"estandarte": Rect2(554.0, 252.0, 86.0, 74.0),
 	"amuleto": Rect2(554.0, 332.0, 86.0, 74.0),
 	"reliquia": Rect2(554.0, 412.0, 86.0, 74.0),
-	"anillo_1": Rect2(296.0, 497.0, 74.0, 74.0),
-	"anillo_2": Rect2(410.0, 497.0, 74.0, 74.0),
-	"escudo": Rect2(523.0, 497.0, 74.0, 74.0)
+	"anillo_1": Rect2(296, 473, 78, 74),
+	"anillo_2": Rect2(387, 474, 74, 74),
+	"escudo": Rect2(471, 474, 74, 74)
 }
 
 const EQUIPMENT_VISUAL_INSET: float = 0.0
@@ -404,7 +404,7 @@ var passive_translations_en: Dictionary = {
 
 const GRID_COLUMNS: int = 8
 const GRID_ROWS: int = 5
-const GRID_ORIGIN: Vector2 = Vector2(771.0, 235.0)
+const GRID_ORIGIN: Vector2 = Vector2(771, 235)
 const GRID_SLOT_SIZE: Vector2 = Vector2(80.0, 78.0)
 const GRID_GAP: Vector2 = Vector2(13.0, 10.0)
 
@@ -1267,7 +1267,7 @@ func _build_titles() -> void:
 func _build_character_preview() -> void:
 	character_preview = TextureRect.new()
 	character_preview.name = "PersonajeInventario"
-	character_preview.position = Vector2(243, 178)
+	character_preview.position = Vector2(243, 171)
 	character_preview.size = Vector2(330, 330)
 	character_preview.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	character_preview.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
@@ -1373,7 +1373,7 @@ func _build_stats_panel() -> void:
 	attributes_title_label = _create_label(
 		menu_canvas,
 		_inv_text("attributes"),
-		Vector2(228, 665),
+		Vector2(235, 658),
 		Vector2(350, 30),
 		18,
 		HORIZONTAL_ALIGNMENT_CENTER,

@@ -297,24 +297,42 @@ func _draw_element_text(element: Dictionary, screen_rect: Rect2, opacity: float)
 	)
 	var source_name: String = str(element.get("friendly_name", element.get("name", "")))
 	var text: String = display_text if show_real_text else source_name
-	text = text.replace("\\n", "\n").strip_edges()
-	if text.is_empty():
+	text = text.replace("\\n", "\n")
+	if text.strip_edges().is_empty():
 		return
 	var base_size: int = maxi(8, int(element.get("font_size", 12)))
 	var font_size: int = clampi(int(round(float(base_size) * _view_scale)), 6, 52)
 	var font: Font = preview_font if is_instance_valid(preview_font) else ThemeDB.fallback_font
-	var padding: float = maxf(2.0, 4.0 * _view_scale)
+	var control_type: String = str(element.get("control_type", "Label"))
+	var design_padding: float = float(element.get(
+		"text_padding", 2.0 if control_type == "Button" else 0.0
+	))
+	var padding: float = maxf(0.0, design_padding * _view_scale)
 	var text_rect: Rect2 = screen_rect.grow(-padding)
 	if text_rect.size.x <= 3.0 or text_rect.size.y <= 3.0:
 		return
-	var lines: Array[String] = _wrap_text(text, text_rect.size.x, font_size)
-	var line_height: float = maxf(float(font_size) * 1.12, font.get_height(font_size))
+	var autowrap: bool = bool(element.get("autowrap", false))
+	var lines: Array[String] = []
+	if autowrap:
+		lines = _wrap_text(text, text_rect.size.x, font_size, font)
+	else:
+		for raw_line: String in text.split("\n", true):
+			lines.append(raw_line)
+	var line_height: float = (
+		font.get_height(font_size)
+		+ float(element.get("line_spacing", 0.0)) * _view_scale
+	)
 	var maximum_lines: int = maxi(1, int(floor(text_rect.size.y / line_height)))
 	if lines.size() > maximum_lines:
 		lines.resize(maximum_lines)
 		if not lines.is_empty():
 			lines[lines.size() - 1] = _ellipsize(
-				lines[lines.size() - 1], text_rect.size.x, font_size
+				lines[lines.size() - 1], text_rect.size.x, font_size, font
+			)
+	if not autowrap:
+		for line_index: int in range(lines.size()):
+			lines[line_index] = _ellipsize(
+				lines[line_index], text_rect.size.x, font_size, font
 			)
 	var total_height: float = line_height * float(lines.size())
 	var vertical_alignment: int = int(element.get("vertical_alignment", VERTICAL_ALIGNMENT_CENTER))
@@ -503,12 +521,13 @@ func _fallback_border(style_name: String) -> Color:
 			return Color(0.0, 0.0, 0.0, 0.0)
 
 
-func _wrap_text(value: String, available_width: float, font_size: int) -> Array[String]:
+func _wrap_text(
+	value: String,
+	available_width: float,
+	font_size: int,
+	font: Font
+) -> Array[String]:
 	var result: Array[String] = []
-	var approximate_width: float = maxf(3.5, float(font_size) * 0.56)
-	var maximum_characters: int = maxi(
-		1, int(floor(maxf(4.0, available_width) / approximate_width))
-	)
 	for paragraph: String in value.split("\n", true):
 		if paragraph.is_empty():
 			result.append("")
@@ -516,34 +535,48 @@ func _wrap_text(value: String, available_width: float, font_size: int) -> Array[
 		var words: PackedStringArray = paragraph.split(" ", false)
 		var current: String = ""
 		for word: String in words:
-			if word.length() > maximum_characters:
-				if not current.is_empty():
-					result.append(current)
-					current = ""
-				var cursor: int = 0
-				while cursor < word.length():
-					result.append(word.substr(cursor, maximum_characters))
-					cursor += maximum_characters
-				continue
 			var candidate: String = word if current.is_empty() else current + " " + word
-			if candidate.length() <= maximum_characters:
+			if font.get_string_size(candidate, HORIZONTAL_ALIGNMENT_LEFT, -1.0, font_size).x <= available_width:
 				current = candidate
-			else:
+				continue
+			if not current.is_empty():
 				result.append(current)
+				current = ""
+			if font.get_string_size(word, HORIZONTAL_ALIGNMENT_LEFT, -1.0, font_size).x <= available_width:
 				current = word
+				continue
+			var fragment: String = ""
+			for character: String in word:
+				var next_fragment: String = fragment + character
+				if (
+					not fragment.is_empty()
+					and font.get_string_size(next_fragment, HORIZONTAL_ALIGNMENT_LEFT, -1.0, font_size).x > available_width
+				):
+					result.append(fragment)
+					fragment = character
+				else:
+					fragment = next_fragment
+			current = fragment
 		if not current.is_empty():
 			result.append(current)
 	return result
 
 
-func _ellipsize(value: String, available_width: float, font_size: int) -> String:
-	var approximate_width: float = maxf(3.5, float(font_size) * 0.56)
-	var maximum_characters: int = maxi(
-		2, int(floor(maxf(4.0, available_width) / approximate_width))
-	)
-	if value.length() <= maximum_characters:
+func _ellipsize(
+	value: String,
+	available_width: float,
+	font_size: int,
+	font: Font
+) -> String:
+	if font.get_string_size(value, HORIZONTAL_ALIGNMENT_LEFT, -1.0, font_size).x <= available_width:
 		return value
-	return value.substr(0, maximum_characters - 1) + "…"
+	var result: String = value
+	while not result.is_empty():
+		var candidate: String = result + "…"
+		if font.get_string_size(candidate, HORIZONTAL_ALIGNMENT_LEFT, -1.0, font_size).x <= available_width:
+			return candidate
+		result = result.left(result.length() - 1)
+	return "…"
 
 
 func _format_metric(value: float) -> String:

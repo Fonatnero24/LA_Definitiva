@@ -247,9 +247,34 @@ func _scan_directory(path: String) -> void:
 		elif entry.get_extension().to_lower() == "gd":
 			var parsed: Dictionary = Parser.parse_script(full_path)
 			var parsed_elements: Array = parsed.get("elements", [])
-			if not parsed_elements.is_empty():
+			if not parsed_elements.is_empty() or _looks_like_visual_script(full_path):
 				scripts.append(full_path)
 	directory.list_dir_end()
+
+
+func _looks_like_visual_script(path: String) -> bool:
+	var source: String = Parser.read_text(path)
+	if source.is_empty():
+		return false
+	var extends_visual: bool = (
+		source.contains("extends Control")
+		or source.contains("extends Panel")
+		or source.contains("extends CanvasLayer")
+		or source.contains("class_name InventarioUI")
+		or source.contains("class_name TiendaUI")
+		or source.contains("class_name ForjaUI")
+		or source.contains("class_name ArbolHabilidadesUI")
+	)
+	if not extends_visual:
+		return false
+	return (
+		source.contains(".position")
+		or source.contains(".size")
+		or source.contains("Rect2(")
+		or source.contains("_create_label(")
+		or source.contains("_create_button(")
+		or source.contains("TextureRect.new()")
+	)
 
 
 func _scan_image_directory(path: String) -> void:
@@ -681,11 +706,12 @@ func _on_numeric_changed(_value: float) -> void:
 	var elements: Array = document.get("elements", [])
 	if selected_element >= elements.size():
 		return
-	if not bool(
-		elements[selected_element].get(
-			"editable", not bool(elements[selected_element].get("runtime_only", false))
-		)
-	):
+	var selected_data: Dictionary = elements[selected_element]
+	var runtime_only: bool = bool(selected_data.get("runtime_only", false))
+	var editable: bool = bool(selected_data.get("editable", not runtime_only))
+	if runtime_only:
+		editable = true
+	if not editable:
 		return
 	var rect: Rect2 = Rect2(
 		Vector2(float(x_spin.value), float(y_spin.value)),
@@ -850,9 +876,9 @@ func _save_changes() -> void:
 	if not current_editor_text.is_empty() and current_editor_text != original_source:
 		status_label.text = "El script cambió desde el último escaneo. Pulsa Escanear Scripts y vuelve a intentarlo."
 		return
-	var replacements: Array = Parser.build_replacements(document.get("elements", []))
+	var replacements: Array = Parser.build_replacements(original_source, document.get("elements", []))
 	if replacements.is_empty():
-		status_label.text = "No hay cambios pendientes."
+		status_label.text = "No se encontró una coordenada real del script para el elemento movido."
 		return
 	var backup_path: String = path + ".taskbar_ui_editor.bak"
 	if not FileAccess.file_exists(backup_path):

@@ -961,14 +961,10 @@ static func _build_inventory(source: String, elements: Array, images: Array) -> 
 	var roster_texts: Array[String] = ["◆ PAL\nNv.14", "◆ ARQ", "◆ ARC"]
 	for index: int in range(3):
 		var element_name: String = "inventory_character_slot_%d" % index
-		var existing_index: int = _find_element(elements, element_name)
-		var position: Vector2 = roster_positions[index]
-		if existing_index >= 0:
-			var existing: Dictionary = elements[existing_index]
-			var existing_rect: Rect2 = existing.get(
-				"rect", Rect2(position, Vector2.ZERO)
-			)
-			position = existing_rect.position
+		var position_data: Dictionary = _vector_array_item_data(
+			source, "positions", index, roster_positions[index]
+		)
+		var position: Vector2 = position_data.get("value", roster_positions[index])
 		var button: Dictionary = _visual_element(
 			element_name,
 			Rect2(position, Vector2(92.0, 54.0)),
@@ -983,6 +979,14 @@ static func _build_inventory(source: String, elements: Array, images: Array) -> 
 		][index]
 		button["border_width"] = 2.0
 		button["corner_radius"] = 9.0
+		button["kind"] = "position_only"
+		button["span_a_start"] = int(position_data.get("start", -1))
+		button["span_a_end"] = int(position_data.get("end", -1))
+		button["line"] = int(position_data.get("line", 0))
+		button["runtime_only"] = false
+		button["editable"] = int(button["span_a_start"]) >= 0
+		button["allow_resize"] = false
+		button["source_kind"] = "Posición exacta del array positions"
 		_upsert(elements, button)
 
 	var equipment_names: Array[String] = [
@@ -1035,7 +1039,7 @@ static func _build_inventory(source: String, elements: Array, images: Array) -> 
 		HORIZONTAL_ALIGNMENT_CENTER,
 		8
 	)
-	_build_inventory_stats(elements)
+	_build_inventory_stats(source, elements)
 	_build_inventory_tabs(source, elements)
 	_build_inventory_grid(source, elements)
 	_upsert_label(
@@ -1080,7 +1084,7 @@ static func _build_inventory(source: String, elements: Array, images: Array) -> 
 		HORIZONTAL_ALIGNMENT_CENTER,
 		8
 	)
-	_build_inventory_actions(elements)
+	_build_inventory_actions(source, elements)
 	return {
 		"elements": elements,
 		"canvas_size": canvas_size,
@@ -1090,24 +1094,25 @@ static func _build_inventory(source: String, elements: Array, images: Array) -> 
 	}
 
 
-static func _build_inventory_stats(elements: Array) -> void:
+static func _build_inventory_stats(source: String, elements: Array) -> void:
 	var rows: Array = [
-		{"id": "vida", "name": "VIDA", "value": "346", "position": Vector2(166.0, 696.0)},
-		{"id": "dano", "name": "DAÑO", "value": "37", "position": Vector2(166.0, 746.0)},
-		{"id": "def", "name": "DEF", "value": "37", "position": Vector2(166.0, 796.0)},
-		{"id": "vel", "name": "VEL", "value": "25", "position": Vector2(452.0, 696.0)},
-		{"id": "magia", "name": "MAGIA", "value": "18", "position": Vector2(452.0, 746.0)}
+		{"id": "vida", "source_id": "vida", "name": "VIDA", "value": "346", "position": Vector2(166.0, 696.0)},
+		{"id": "dano", "source_id": "daño", "name": "DAÑO", "value": "37", "position": Vector2(166.0, 746.0)},
+		{"id": "def", "source_id": "def", "name": "DEF", "value": "37", "position": Vector2(166.0, 796.0)},
+		{"id": "vel", "source_id": "vel", "name": "VEL", "value": "25", "position": Vector2(452.0, 696.0)},
+		{"id": "magia", "source_id": "magia", "name": "MAGIA", "value": "18", "position": Vector2(452.0, 746.0)}
 	]
 	for data: Dictionary in rows:
 		var base_name: String = "inventory_stat_%s_name" % str(data["id"])
-		var position: Vector2 = data["position"]
-		var driver_index: int = _find_element(elements, base_name)
-		if driver_index >= 0:
-			var driver_element: Dictionary = elements[driver_index]
-			var driver_rect: Rect2 = driver_element.get(
-				"rect", Rect2(position, Vector2.ZERO)
-			)
-			position = driver_rect.position
+		var position_data: Dictionary = _dictionary_array_vector_data(
+			source,
+			"stat_layout",
+			"id",
+			str(data["source_id"]),
+			"position",
+			data["position"]
+		)
+		var position: Vector2 = position_data.get("value", data["position"])
 		_upsert_label(
 			elements,
 			base_name,
@@ -1118,8 +1123,21 @@ static func _build_inventory_stats(elements: Array) -> void:
 			HORIZONTAL_ALIGNMENT_LEFT,
 			9
 		)
+		var driver_index: int = _find_element(elements, base_name)
+		if driver_index >= 0:
+			var driver: Dictionary = elements[driver_index]
+			driver["kind"] = "position_only"
+			driver["span_a_start"] = int(position_data.get("start", -1))
+			driver["span_a_end"] = int(position_data.get("end", -1))
+			driver["line"] = int(position_data.get("line", 0))
+			driver["runtime_only"] = false
+			driver["editable"] = int(driver["span_a_start"]) >= 0
+			driver["allow_resize"] = false
+			driver["source_kind"] = "Posición exacta de stat_layout"
+			elements[driver_index] = driver
+		var value_name: String = "inventory_stat_%s_value" % str(data["id"])
 		var value: Dictionary = _visual_element(
-			"inventory_stat_%s_value" % str(data["id"]),
+			value_name,
 			Rect2(position + Vector2(116.0, 0.0), Vector2(96.0, 28.0)),
 			str(data["value"]),
 			"Label",
@@ -1130,6 +1148,8 @@ static func _build_inventory_stats(elements: Array) -> void:
 		value["horizontal_alignment"] = HORIZONTAL_ALIGNMENT_RIGHT
 		value["linked_to"] = base_name
 		value["linked_offset"] = Vector2(116.0, 0.0)
+		value["drag_driver"] = base_name
+		value["allow_resize"] = false
 		_upsert(elements, value)
 
 
@@ -1209,13 +1229,13 @@ static func _build_inventory_grid(source: String, elements: Array) -> void:
 		_upsert(elements, slot)
 
 
-static func _build_inventory_actions(elements: Array) -> void:
+static func _build_inventory_actions(source: String, elements: Array) -> void:
 	var buttons: Array = [
-		{"name": "equip_button", "rect": Rect2(858.0, 794.0, 148.0, 34.0), "text": "EQUIPAR", "accent": Color("#5FF0B5")},
-		{"name": "use_button", "rect": Rect2(1100.0, 794.0, 136.0, 34.0), "text": "USAR", "accent": Color("#91D5FF")},
-		{"name": "close_bottom_button", "rect": Rect2(1370.0, 794.0, 122.0, 34.0), "text": "Cerrar", "accent": Color("#F2D175")},
-		{"name": "sort_button", "rect": Rect2(1414.0, 711.0, 78.0, 28.0), "text": "ORDENAR", "accent": Color("#E8CA6A")},
-		{"name": "close_top_button", "rect": Rect2(1484.0, 57.0, 58.0, 58.0), "text": "×", "accent": Color("#FFB186")}
+		{"name": "equip_button", "rect": _source_rect(source, "equip_button", Rect2(858.0, 794.0, 148.0, 34.0)), "text": "EQUIPAR", "accent": Color("#5FF0B5")},
+		{"name": "use_button", "rect": _source_rect(source, "use_button", Rect2(1100.0, 794.0, 136.0, 34.0)), "text": "USAR", "accent": Color("#91D5FF")},
+		{"name": "close_bottom_button", "rect": _source_rect(source, "close_bottom_button", Rect2(1370.0, 794.0, 122.0, 34.0)), "text": "Cerrar", "accent": Color("#F2D175")},
+		{"name": "sort_button", "rect": _source_rect(source, "sort_button", Rect2(1414.0, 711.0, 78.0, 28.0)), "text": "ORDENAR", "accent": Color("#E8CA6A")},
+		{"name": "close_top_button", "rect": _source_rect(source, "close_button", Rect2(1484.0, 57.0, 58.0, 58.0)), "text": "×", "accent": Color("#FFB186")}
 	]
 	for data: Dictionary in buttons:
 		_upsert_button(
@@ -1228,6 +1248,7 @@ static func _build_inventory_actions(elements: Array) -> void:
 			data["accent"],
 			10
 		)
+	_attach_property_rect_source_alias(source, elements, "close_top_button", "close_button")
 
 
 static func _build_selection(source: String, elements: Array, images: Array) -> Dictionary:
@@ -1938,6 +1959,16 @@ static func _upsert(elements: Array, blueprint: Dictionary) -> void:
 	var span_b_start: int = int(current.get("span_b_start", -1))
 	var span_b_end: int = int(current.get("span_b_end", -1))
 	var source_line: int = int(current.get("line", 0))
+	var source_rect: Rect2 = current.get("rect", Rect2())
+	var source_local_rect: Rect2 = current.get("local_rect", source_rect)
+	var source_font_size: int = int(current.get("font_size", 0))
+	var preserve_source_geometry: bool = (
+		span_a_start >= 0
+		and span_a_end >= span_a_start
+		and not blueprint.has("save_offset")
+		and str(blueprint.get("view_tag", "all")) == "all"
+		and not bool(blueprint.get("force_blueprint_rect", false))
+	)
 	for key: Variant in blueprint.keys():
 		current[key] = blueprint[key]
 	if span_a_start >= 0 and span_a_end >= span_a_start:
@@ -1949,6 +1980,11 @@ static func _upsert(elements: Array, blueprint: Dictionary) -> void:
 		current["line"] = source_line
 		current["runtime_only"] = false
 		current["editable"] = true
+		if preserve_source_geometry:
+			current["rect"] = source_rect
+			current["local_rect"] = source_local_rect
+			if source_font_size > 0:
+				current["font_size"] = source_font_size
 	current["template_only"] = false
 	elements[index] = current
 
@@ -2109,6 +2145,97 @@ static func _best_image(images: Array, hints: Array[String]) -> String:
 			if combined.contains(hint.to_lower()):
 				return str(image.get("path", ""))
 	return ""
+
+
+static func _vector_array_item_data(
+	source: String,
+	array_name: String,
+	item_index: int,
+	fallback: Vector2
+) -> Dictionary:
+	var array_regex: RegEx = RegEx.new()
+	array_regex.compile(
+		"(?ms)(?:const|var)\\s+" + array_name
+		+ "\\s*(?::[^=\\n]+)?=\\s*\\[(.*?)\\]"
+	)
+	var array_match: RegExMatch = array_regex.search(source)
+	if array_match == null:
+		return {"value": fallback, "start": -1, "end": -1, "line": 0}
+	var block: String = array_match.get_string(1)
+	var vector_regex: RegEx = RegEx.new()
+	vector_regex.compile(
+		"(Vector2\\(\\s*([-+]?\\d+(?:\\.\\d+)?)"
+		+ "\\s*,\\s*([-+]?\\d+(?:\\.\\d+)?)\\s*\\))"
+	)
+	var matches: Array[RegExMatch] = vector_regex.search_all(block)
+	if item_index < 0 or item_index >= matches.size():
+		return {"value": fallback, "start": -1, "end": -1, "line": 0}
+	var match: RegExMatch = matches[item_index]
+	var global_start: int = array_match.get_start(1) + match.get_start(1)
+	return {
+		"value": Vector2(float(match.get_string(2)), float(match.get_string(3))),
+		"start": global_start,
+		"end": array_match.get_start(1) + match.get_end(1),
+		"line": _line_at(source, global_start)
+	}
+
+
+static func _dictionary_array_vector_data(
+	source: String,
+	array_name: String,
+	key_name: String,
+	key_value: String,
+	field_name: String,
+	fallback: Vector2
+) -> Dictionary:
+	var array_regex: RegEx = RegEx.new()
+	array_regex.compile(
+		"(?ms)(?:const|var)\\s+" + array_name
+		+ "\\s*(?::[^=\\n]+)?=\\s*\\[(.*?)\\]"
+	)
+	var array_match: RegExMatch = array_regex.search(source)
+	if array_match == null:
+		return {"value": fallback, "start": -1, "end": -1, "line": 0}
+	var block: String = array_match.get_string(1)
+	var item_regex: RegEx = RegEx.new()
+	item_regex.compile(
+		"(?s)\\{[^\\}]*[\"']" + key_name + "[\"']\\s*:\\s*[\"']"
+		+ key_value
+		+ "[\"'][^\\}]*[\"']" + field_name
+		+ "[\"']\\s*:\\s*(Vector2\\(\\s*([-+]?\\d+(?:\\.\\d+)?)"
+		+ "\\s*,\\s*([-+]?\\d+(?:\\.\\d+)?)\\s*\\))[^\\}]*\\}"
+	)
+	var match: RegExMatch = item_regex.search(block)
+	if match == null:
+		return {"value": fallback, "start": -1, "end": -1, "line": 0}
+	var global_start: int = array_match.get_start(1) + match.get_start(1)
+	return {
+		"value": Vector2(float(match.get_string(2)), float(match.get_string(3))),
+		"start": global_start,
+		"end": array_match.get_start(1) + match.get_end(1),
+		"line": _line_at(source, global_start)
+	}
+
+
+static func _attach_property_rect_source_alias(
+	source: String,
+	elements: Array,
+	element_name: String,
+	source_variable_name: String
+) -> void:
+	var position_data: Dictionary = _property_vector_data(source, source_variable_name, "position")
+	var size_data: Dictionary = _property_vector_data(source, source_variable_name, "size")
+	if position_data.is_empty() or size_data.is_empty():
+		return
+	_mark_element_source_spans(
+		elements,
+		element_name,
+		int(position_data.get("start", -1)),
+		int(position_data.get("end", -1)),
+		int(size_data.get("start", -1)),
+		int(size_data.get("end", -1)),
+		int(position_data.get("line", 0))
+	)
 
 
 static func _vector_constant_data(

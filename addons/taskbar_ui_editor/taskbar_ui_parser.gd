@@ -1311,16 +1311,27 @@ static func format_number(value: float) -> String:
 	return ("%.2f" % value).trim_suffix("0").trim_suffix("0").trim_suffix(".")
 
 
-static func build_replacements(elements: Array) -> Array:
+static func build_replacements(source: String, elements: Array) -> Array:
 	var replacements: Array = []
 	for raw_element: Variant in elements:
 		if not (raw_element is Dictionary):
 			continue
-		var element: Dictionary = raw_element
-		if not bool(element.get("dirty", false)):
+		var original_element: Dictionary = raw_element
+		if not bool(original_element.get("dirty", false)):
 			continue
-		if bool(element.get("runtime_only", false)):
+
+		var element: Dictionary = original_element.duplicate(true)
+		if not _element_has_writable_source(element):
+			var resolved_source: Dictionary = _resolve_element_source(source, element)
+			for key: Variant in resolved_source.keys():
+				element[key] = resolved_source[key]
+
+		# Los elementos PLAY pueden guardarse siempre que hayan podido vincularse
+		# con una posición real del script. Los elementos puramente decorativos
+		# continúan ignorándose para no escribir coordenadas inventadas.
+		if not _element_has_writable_source(element):
 			continue
+
 		var rect: Rect2 = element.get("rect", Rect2())
 		var save_offset: Vector2 = element.get("save_offset", Vector2.ZERO)
 		if save_offset != Vector2.ZERO:
@@ -1395,6 +1406,420 @@ static func build_replacements(elements: Array) -> Array:
 			return int(a.get("start", 0)) > int(b.get("start", 0))
 	)
 	return replacements
+
+
+static func _element_has_writable_source(element: Dictionary) -> bool:
+	var kind: String = str(element.get("kind", ""))
+	if kind == "scalar_position":
+		return (
+			int(element.get("span_x_start", -1)) >= 0
+			and int(element.get("span_x_end", -1)) > int(element.get("span_x_start", -1))
+			and int(element.get("span_y_start", -1)) >= 0
+			and int(element.get("span_y_end", -1)) > int(element.get("span_y_start", -1))
+		)
+	var position_valid: bool = (
+		int(element.get("span_a_start", -1)) >= 0
+		and int(element.get("span_a_end", -1)) > int(element.get("span_a_start", -1))
+	)
+	if not position_valid:
+		return false
+	if kind in ["position_only", "rect2"]:
+		return true
+	return (
+		int(element.get("span_b_start", -1)) >= 0
+		and int(element.get("span_b_end", -1)) > int(element.get("span_b_start", -1))
+	)
+
+
+static func _resolve_element_source(source: String, element: Dictionary) -> Dictionary:
+	var candidate_names: Array[String] = []
+	var explicit_name: String = str(element.get("source_variable", "")).strip_edges()
+	if not explicit_name.is_empty():
+		candidate_names.append(explicit_name)
+	var element_name: String = str(element.get("name", "")).strip_edges()
+	if not element_name.is_empty() and not candidate_names.has(element_name):
+		candidate_names.append(element_name)
+	var source_alias: String = str(element.get("source_alias", "")).strip_edges()
+	if not source_alias.is_empty() and not candidate_names.has(source_alias):
+		candidate_names.append(source_alias)
+
+	for variable_name: String in candidate_names:
+		var property_data: Dictionary = _property_rect_source_data(source, variable_name)
+		if not property_data.is_empty():
+			return property_data
+		var call_data: Dictionary = _assigned_call_source_data(source, variable_name)
+		if not call_data.is_empty():
+			return call_data
+
+	# Segunda pasada: algunos planos PLAY usan un nombre visual distinto al de la
+	# variable real. En ese caso se compara la geometría original del elemento
+	# con todos los controles creados en el script. Así se pueden enlazar formas
+	# como `var boton := _create_button(...)`, asignaciones tipadas, propiedades
+	# `.position/.size` y helpers personalizados sin depender del nombre exacto.
+	var geometry_data: Dictionary = _resolve_source_by_geometry(source, element, candidate_names)
+	if not geometry_data.is_empty():
+		return geometry_data
+	return {}
+
+
+static func _resolve_source_by_geometry(
+	source: String, element: Dictionary, candidate_names: Array[String]
+) -> Dictionary:
+	var candidates: Array = _collect_writable_control_sources(source)
+	if candidates.is_empty():
+		return {}
+
+	var original_rect: Rect2 = element.get("local_rect", element.get("rect", Rect2()))
+	var save_offset: Vector2 = element.get("save_offset", Vector2.ZERO)
+	if save_offset != Vector2.ZERO:
+		original_rect.position -= save_offset
+
+	var best: Dictionary = {}
+	var best_score: float = INF
+	for raw_candidate: Variant in candidates:
+		if not (raw_candidate is Dictionary):
+			continue
+		var candidate: Dictionary = raw_candidate
+		var candidate_rect: Rect2 = candidate.get("source_rect", Rect2())
+		var position_distance: float = original_rect.position.distance_to(candidate_rect.position)
+		var size_distance: float = original_rect.size.distance_to(candidate_rect.size)
+		var name_bonus: float = _source_name_bonus(
+			str(candidate.get("source_variable", "")), candidate_names
+		)
+		var score: float = position_distance + size_distance * 0.65 - name_bonus
+
+		# Con nombre coincidente permitimos pequeñas diferencias de geometría.
+		# Sin coincidencia de nombre exigimos una geometría prácticamente exacta
+		# para evitar enlazar el elemento con otro botón cercano.
+		var acceptable: bool = false
+		if name_bonus >= 100.0:
+			acceptable = position_distance <= 96.0 and size_distance <= 96.0
+		elif name_bonus > 0.0:
+			acceptable = position_distance <= 32.0 and size_distance <= 32.0
+		else:
+			acceptable = position_distance <= 2.5 and size_distance <= 2.5
+		if acceptable and score < best_score:
+			best_score = score
+			best = candidate
+
+	if best.is_empty():
+		return {}
+	best.erase("source_rect")
+	best.erase("source_variable")
+	return best
+
+
+static func _collect_writable_control_sources(source: String) -> Array:
+	var result: Array = []
+	var seen: Dictionary = {}
+	var number: String = "[-+]?\\d+(?:\\.\\d+)?"
+	var vector_regex: RegEx = RegEx.new()
+	vector_regex.compile(
+		"Vector2i?\\(\\s*(" + number + ")\\s*,\\s*(" + number + ")\\s*\\)"
+	)
+
+	# 1) Controles creados mediante cualquier helper asignado a una variable:
+	#    label = _create_label(...), var button: Button = _menu_button(...), etc.
+	var assignment_regex: RegEx = RegEx.new()
+	assignment_regex.compile(
+		"(?m)^\\s*(?:var\\s+)?([A-Za-z_][A-Za-z0-9_]*)"
+		+ "(?:\\s*:[^:=\\n]+)?\\s*(?::=|=)\\s*"
+		+ "_[A-Za-z_][A-Za-z0-9_]*\\s*\\("
+	)
+	for assignment: RegExMatch in assignment_regex.search_all(source):
+		var variable_name: String = assignment.get_string(1)
+		var opening_parenthesis: int = assignment.get_end(0) - 1
+		var closing_parenthesis: int = _find_matching_parenthesis(source, opening_parenthesis)
+		if closing_parenthesis <= opening_parenthesis:
+			continue
+		var call_text: String = source.substr(
+			opening_parenthesis, closing_parenthesis - opening_parenthesis + 1
+		)
+		var vector_matches: Array[RegExMatch] = vector_regex.search_all(call_text)
+		if vector_matches.is_empty():
+			continue
+		var position_match: RegExMatch = vector_matches[0]
+		var position: Vector2 = Vector2(
+			float(position_match.get_string(1)), float(position_match.get_string(2))
+		)
+		var size: Vector2 = Vector2.ZERO
+		var data: Dictionary = {
+			"kind": "position_only",
+			"span_a_start": opening_parenthesis + position_match.get_start(0),
+			"span_a_end": opening_parenthesis + position_match.get_end(0),
+			"source_rect": Rect2(position, size),
+			"source_variable": variable_name
+		}
+		if vector_matches.size() >= 2:
+			var size_match: RegExMatch = vector_matches[1]
+			size = Vector2(float(size_match.get_string(1)), float(size_match.get_string(2)))
+			data["kind"] = "position_size"
+			data["span_b_start"] = opening_parenthesis + size_match.get_start(0)
+			data["span_b_end"] = opening_parenthesis + size_match.get_end(0)
+			data["source_rect"] = Rect2(position, size)
+		var key: String = "%d:%d" % [int(data["span_a_start"]), int(data["span_a_end"])]
+		if not seen.has(key):
+			seen[key] = true
+			result.append(data)
+
+	# 2) Controles construidos con `.new()` y colocados después mediante
+	#    `control.position = Vector2(...)` y `control.size = Vector2(...)`.
+	var property_regex: RegEx = RegEx.new()
+	property_regex.compile(
+		"(?m)^\\s*([A-Za-z_][A-Za-z0-9_]*)\\.position\\s*=\\s*"
+		+ "(Vector2i?\\(\\s*(" + number + ")\\s*,\\s*(" + number + ")\\s*\\))"
+	)
+	for position_match: RegExMatch in property_regex.search_all(source):
+		var variable_name: String = position_match.get_string(1)
+		var size_data: Dictionary = _property_vector_source_data(source, variable_name, "size")
+		var position: Vector2 = Vector2(
+			float(position_match.get_string(3)), float(position_match.get_string(4))
+		)
+		var size: Vector2 = Vector2.ZERO
+		var data: Dictionary = {
+			"kind": "position_only",
+			"span_a_start": position_match.get_start(2),
+			"span_a_end": position_match.get_end(2),
+			"source_rect": Rect2(position, size),
+			"source_variable": variable_name
+		}
+		if not size_data.is_empty():
+			var size_text: String = source.substr(
+				int(size_data.get("start", -1)),
+				int(size_data.get("end", -1)) - int(size_data.get("start", -1))
+			)
+			var parsed_size: RegExMatch = vector_regex.search(size_text)
+			if parsed_size != null:
+				size = Vector2(
+					float(parsed_size.get_string(1)), float(parsed_size.get_string(2))
+				)
+			data["kind"] = "position_size"
+			data["span_b_start"] = int(size_data.get("start", -1))
+			data["span_b_end"] = int(size_data.get("end", -1))
+			data["source_rect"] = Rect2(position, size)
+		var key: String = "%d:%d" % [int(data["span_a_start"]), int(data["span_a_end"])]
+		if not seen.has(key):
+			seen[key] = true
+			result.append(data)
+
+	# 3) Variantes mediante métodos: control.set_position(Vector2(...)) y
+	#    control.set_size(Vector2(...)). Son comunes en interfaces construidas
+	#    por código y antes no podían guardarse desde la Vista PLAY.
+	var method_regex: RegEx = RegEx.new()
+	method_regex.compile(
+		"(?m)^\\s*([A-Za-z_][A-Za-z0-9_]*)\\.set_position\\(\\s*"
+		+ "(Vector2i?\\(\\s*(" + number + ")\\s*,\\s*(" + number + ")\\s*\\))\\s*\\)"
+	)
+	for method_match: RegExMatch in method_regex.search_all(source):
+		var method_variable_name: String = method_match.get_string(1)
+		var method_size_data: Dictionary = _method_vector_source_data(
+			source, method_variable_name, "set_size"
+		)
+		var method_position: Vector2 = Vector2(
+			float(method_match.get_string(3)), float(method_match.get_string(4))
+		)
+		var method_size: Vector2 = Vector2.ZERO
+		var method_data: Dictionary = {
+			"kind": "position_only",
+			"span_a_start": method_match.get_start(2),
+			"span_a_end": method_match.get_end(2),
+			"source_rect": Rect2(method_position, method_size),
+			"source_variable": method_variable_name
+		}
+		if not method_size_data.is_empty():
+			var method_size_text: String = source.substr(
+				int(method_size_data.get("start", -1)),
+				int(method_size_data.get("end", -1)) - int(method_size_data.get("start", -1))
+			)
+			var parsed_method_size: RegExMatch = vector_regex.search(method_size_text)
+			if parsed_method_size != null:
+				method_size = Vector2(
+					float(parsed_method_size.get_string(1)),
+					float(parsed_method_size.get_string(2))
+				)
+			method_data["kind"] = "position_size"
+			method_data["span_b_start"] = int(method_size_data.get("start", -1))
+			method_data["span_b_end"] = int(method_size_data.get("end", -1))
+			method_data["source_rect"] = Rect2(method_position, method_size)
+		var method_key: String = "%d:%d" % [
+			int(method_data["span_a_start"]), int(method_data["span_a_end"])
+		]
+		if not seen.has(method_key):
+			seen[method_key] = true
+			result.append(method_data)
+	return result
+
+
+static func _method_vector_source_data(
+	source: String, variable_name: String, method_name: String
+) -> Dictionary:
+	var regex: RegEx = RegEx.new()
+	regex.compile(
+		"(?m)^\\s*"
+		+ _regex_escape_identifier(variable_name)
+		+ "\\."
+		+ method_name
+		+ "\\(\\s*(Vector2i?\\(\\s*[-+]?\\d+(?:\\.\\d+)?\\s*,\\s*"
+		+ "[-+]?\\d+(?:\\.\\d+)?\\s*\\))\\s*\\)"
+	)
+	var match: RegExMatch = regex.search(source)
+	if match == null:
+		return {}
+	return {"start": match.get_start(1), "end": match.get_end(1)}
+
+
+static func _source_name_bonus(source_name: String, candidate_names: Array[String]) -> float:
+	var normalized_source: String = _normalize_source_identifier(source_name)
+	if normalized_source.is_empty():
+		return 0.0
+	var best: float = 0.0
+	for raw_name: String in candidate_names:
+		var normalized_candidate: String = _normalize_source_identifier(raw_name)
+		if normalized_candidate.is_empty():
+			continue
+		if normalized_source == normalized_candidate:
+			best = maxf(best, 240.0)
+		elif normalized_source.contains(normalized_candidate) or normalized_candidate.contains(normalized_source):
+			best = maxf(best, 120.0)
+		else:
+			var source_tokens: PackedStringArray = normalized_source.split("_", false)
+			var candidate_tokens: PackedStringArray = normalized_candidate.split("_", false)
+			var shared: int = 0
+			for token: String in source_tokens:
+				if candidate_tokens.has(token):
+					shared += 1
+			best = maxf(best, float(shared) * 24.0)
+	return best
+
+
+static func _normalize_source_identifier(value: String) -> String:
+	var result: String = value.to_lower().strip_edges()
+	var prefixes: Array[String] = [
+		"runtime_", "play_", "preview_", "blueprint_", "shop_", "inventory_",
+		"forge_", "skill_", "menu_", "ui_"
+	]
+	for prefix: String in prefixes:
+		if result.begins_with(prefix):
+			result = result.trim_prefix(prefix)
+	var suffixes: Array[String] = ["_runtime", "_play", "_preview", "_visual"]
+	for suffix: String in suffixes:
+		if result.ends_with(suffix):
+			result = result.trim_suffix(suffix)
+	return result
+
+
+static func _property_rect_source_data(source: String, variable_name: String) -> Dictionary:
+	var position_data: Dictionary = _property_vector_source_data(source, variable_name, "position")
+	var size_data: Dictionary = _property_vector_source_data(source, variable_name, "size")
+	if position_data.is_empty():
+		return {}
+	if size_data.is_empty():
+		return {
+			"kind": "position_only",
+			"span_a_start": int(position_data.get("start", -1)),
+			"span_a_end": int(position_data.get("end", -1))
+		}
+	return {
+		"kind": "position_size",
+		"span_a_start": int(position_data.get("start", -1)),
+		"span_a_end": int(position_data.get("end", -1)),
+		"span_b_start": int(size_data.get("start", -1)),
+		"span_b_end": int(size_data.get("end", -1))
+	}
+
+
+static func _property_vector_source_data(
+	source: String, variable_name: String, property_name: String
+) -> Dictionary:
+	var regex: RegEx = RegEx.new()
+	regex.compile(
+		"(?m)^\\s*"
+		+ _regex_escape_identifier(variable_name)
+		+ "\\."
+		+ property_name
+		+ "\\s*=\\s*(Vector2\\(\\s*[-+]?\\d+(?:\\.\\d+)?\\s*,\\s*[-+]?\\d+(?:\\.\\d+)?\\s*\\))"
+	)
+	var match: RegExMatch = regex.search(source)
+	if match == null:
+		return {}
+	return {"start": match.get_start(1), "end": match.get_end(1)}
+
+
+static func _assigned_call_source_data(source: String, variable_name: String) -> Dictionary:
+	var assignment_regex: RegEx = RegEx.new()
+	assignment_regex.compile(
+		"(?m)^\\s*(?:var\\s+)?"
+		+ _regex_escape_identifier(variable_name)
+		+ "(?:\\s*:[^:=\\n]+)?\\s*(?::=|=)\\s*_[A-Za-z0-9_]+\\s*\\("
+	)
+	var assignment_match: RegExMatch = assignment_regex.search(source)
+	if assignment_match == null:
+		return {}
+	var opening_parenthesis: int = assignment_match.get_end(0) - 1
+	var closing_parenthesis: int = _find_matching_parenthesis(source, opening_parenthesis)
+	if closing_parenthesis <= opening_parenthesis:
+		return {}
+	var call_text: String = source.substr(
+		opening_parenthesis, closing_parenthesis - opening_parenthesis + 1
+	)
+	var vector_regex: RegEx = RegEx.new()
+	vector_regex.compile(
+		"Vector2\\(\\s*[-+]?\\d+(?:\\.\\d+)?\\s*,\\s*[-+]?\\d+(?:\\.\\d+)?\\s*\\)"
+	)
+	var vector_matches: Array[RegExMatch] = vector_regex.search_all(call_text)
+	if vector_matches.is_empty():
+		return {}
+	var position_match: RegExMatch = vector_matches[0]
+	var result: Dictionary = {
+		"kind": "position_only",
+		"span_a_start": opening_parenthesis + position_match.get_start(0),
+		"span_a_end": opening_parenthesis + position_match.get_end(0)
+	}
+	if vector_matches.size() >= 2:
+		var size_match: RegExMatch = vector_matches[1]
+		result["kind"] = "position_size"
+		result["span_b_start"] = opening_parenthesis + size_match.get_start(0)
+		result["span_b_end"] = opening_parenthesis + size_match.get_end(0)
+	return result
+
+
+static func _find_matching_parenthesis(source: String, opening_index: int) -> int:
+	if opening_index < 0 or opening_index >= source.length():
+		return -1
+	var depth: int = 0
+	var quote: String = ""
+	var escaped: bool = false
+	for index: int in range(opening_index, source.length()):
+		var character: String = source.substr(index, 1)
+		if not quote.is_empty():
+			if escaped:
+				escaped = false
+			elif character == "\\":
+				escaped = true
+			elif character == quote:
+				quote = ""
+			continue
+		if character == "\"" or character == "'":
+			quote = character
+			continue
+		if character == "(":
+			depth += 1
+		elif character == ")":
+			depth -= 1
+			if depth == 0:
+				return index
+	return -1
+
+
+static func _regex_escape_identifier(value: String) -> String:
+	# Los nombres de variables GDScript solo usan letras, números y guion bajo.
+	var allowed: String = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_"
+	var result: String = ""
+	for index: int in range(value.length()):
+		var character: String = value.substr(index, 1)
+		if allowed.contains(character):
+			result += character
+	return result
 
 
 static func apply_replacements(source: String, replacements: Array) -> String:
