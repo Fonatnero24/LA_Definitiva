@@ -1242,7 +1242,7 @@ func _build_titles() -> void:
 	inventory_title_label = _create_label(
 		menu_canvas,
 		_inv_text("inventory_title"),
-		Vector2(830, 34),
+		Vector2(824, 44),
 		Vector2(672, 62),
 		42,
 		HORIZONTAL_ALIGNMENT_CENTER,
@@ -1373,8 +1373,8 @@ func _build_stats_panel() -> void:
 	attributes_title_label = _create_label(
 		menu_canvas,
 		_inv_text("attributes"),
-		Vector2(235, 658),
-		Vector2(350, 30),
+		Vector2(233, 666),
+		Vector2(352, 24),
 		18,
 		HORIZONTAL_ALIGNMENT_CENTER,
 		Color("#F0C965")
@@ -1390,11 +1390,11 @@ func _build_stats_panel() -> void:
 	)
 
 	var stat_layout: Array[Dictionary] = [
-		{"id": "vida", "text_key": "stat_health", "position": Vector2(166.0, 696.0)},
-		{"id": "daño", "text_key": "stat_damage", "position": Vector2(166.0, 746.0)},
-		{"id": "def", "text_key": "stat_defense", "position": Vector2(166.0, 796.0)},
-		{"id": "vel", "text_key": "stat_speed", "position": Vector2(452.0, 696.0)},
-		{"id": "magia", "text_key": "stat_magic", "position": Vector2(452.0, 746.0)}
+		{"id": "vida", "text_key": "stat_health", "position": Vector2(162, 696)},
+		{"id": "daño", "text_key": "stat_damage", "position": Vector2(160, 740)},
+		{"id": "def", "text_key": "stat_defense", "position": Vector2(281, 782)},
+		{"id": "vel", "text_key": "stat_speed", "position": Vector2(385, 698)},
+		{"id": "magia", "text_key": "stat_magic", "position": Vector2(381, 740)}
 	]
 
 	for stat_data in stat_layout:
@@ -1566,21 +1566,21 @@ func _build_action_buttons() -> void:
 
 	equip_button = _create_overlay_button(
 		_inv_text("equip"),
-		Rect2(858.0, 794.0, 148.0, 34.0),
+		Rect2(828, 774, 148, 34),
 		Color("#5FF0B5")
 	)
 	equip_button.pressed.connect(_on_equip_pressed)
 
 	use_button = _create_overlay_button(
 		_inv_text("use"),
-		Rect2(1100.0, 794.0, 136.0, 34.0),
+		Rect2(1086, 772, 136, 34),
 		Color("#91D5FF")
 	)
 	use_button.pressed.connect(_on_use_pressed)
 
 	close_bottom_button = _create_overlay_button(
 		_inv_text("close"),
-		Rect2(1370.0, 794.0, 122.0, 34.0),
+		Rect2(1352, 774, 122, 34),
 		Color("#F2D175")
 	)
 	close_bottom_button.pressed.connect(close_inventory)

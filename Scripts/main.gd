@@ -432,6 +432,7 @@ var player_name_label: Label
 var enemy_name_label: Label
 
 var skill_button: Button
+var skill_button_press_locked: bool = false
 var forge_button: Button
 var inventory_button: Button
 var map_button: Button
@@ -1689,6 +1690,7 @@ func _create_module_action_buttons() -> void:
 	)
 	shop_button.tooltip_text = _text("shop_tooltip")
 
+	_make_skill_button_single_owner(skill_button)
 	_connect_button_once(
 		skill_button,
 		Callable(self, "_on_skill_button_pressed")
@@ -1736,6 +1738,8 @@ func _get_or_create_top_button(button_name: String) -> Button:
 	button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	button.mouse_filter = Control.MOUSE_FILTER_STOP
 	_remove_duplicate_top_buttons(button_name, button)
+	if button_name == "BotonHabilidades":
+		_make_skill_button_single_owner(button)
 	return button
 
 func _remove_duplicate_top_buttons(
@@ -1765,14 +1769,65 @@ func _connect_button_once(button: Button, callback: Callable) -> void:
 	if not button.pressed.is_connected(callback):
 		button.pressed.connect(callback)
 
-func _on_skill_button_pressed() -> void:
-	if options_open:
+
+func _make_skill_button_single_owner(button: Button) -> void:
+	if not is_instance_valid(button):
 		return
+
+	var main_callback: Callable = Callable(self, "_on_skill_button_pressed")
+	var connections: Array = button.pressed.get_connections()
+
+	for connection_variant: Variant in connections:
+		if not (connection_variant is Dictionary):
+			continue
+
+		var connection: Dictionary = connection_variant as Dictionary
+		var callback_variant: Variant = connection.get("callable")
+		if not (callback_variant is Callable):
+			continue
+
+		var callback: Callable = callback_variant as Callable
+		if callback == main_callback:
+			continue
+		if button.pressed.is_connected(callback):
+			button.pressed.disconnect(callback)
+
+
+func _on_skill_button_pressed() -> void:
+	if options_open or skill_button_press_locked:
+		return
+
 	var module: Node = get_node_or_null("ArbolHabilidadesUI")
 	if not is_instance_valid(module):
 		module = find_child("ArbolHabilidadesUI", true, false)
-	if is_instance_valid(module) and module.has_method("toggle_skill_tree"):
+	if not is_instance_valid(module):
+		push_error("No se encontró el nodo ArbolHabilidadesUI.")
+		return
+
+	skill_button_press_locked = true
+
+	var tree_is_open: bool = false
+	if module.has_method("is_skill_tree_open"):
+		tree_is_open = bool(module.call("is_skill_tree_open"))
+
+	if tree_is_open:
+		if module.has_method("close_skill_tree"):
+			module.call("close_skill_tree")
+	elif module.has_method("open_skill_tree"):
+		module.call("open_skill_tree")
+	elif module.has_method("toggle_skill_tree"):
 		module.call("toggle_skill_tree")
+	else:
+		push_error(
+			"ArbolHabilidadesUI no contiene open_skill_tree(), "
+			+ "close_skill_tree() ni toggle_skill_tree()."
+		)
+
+	call_deferred("_unlock_skill_button_press")
+
+
+func _unlock_skill_button_press() -> void:
+	skill_button_press_locked = false
 
 func _on_forge_button_pressed() -> void:
 	if options_open:
@@ -1877,6 +1932,7 @@ func _ensure_left_top_buttons() -> void:
 	)
 	shop_button.tooltip_text = _text("shop_tooltip")
 
+	_make_skill_button_single_owner(skill_button)
 	_connect_button_once(
 		skill_button,
 		Callable(self, "_on_skill_button_pressed")
