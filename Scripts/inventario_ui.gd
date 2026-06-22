@@ -16,6 +16,11 @@ signal inventory_closed
 	"res://Recursos/Personajes/Paladin/Seleccion/Idle/Paladin1.png"
 )
 
+@export_group("Animación idle")
+@export var enable_character_idle_animation: bool = true
+@export_range(0.05, 1.0, 0.01) var character_idle_frame_seconds: float = 0.18
+@export_range(1, 32, 1) var character_idle_max_frames: int = 24
+
 @export_group("Ventana de inventario")
 @export var usar_ventana_independiente: bool = true
 @export var inventory_window_size: Vector2i = Vector2i(1254, 706)
@@ -443,6 +448,10 @@ var inventory_window_manually_moved: bool = false
 var overlay: Control
 var menu_canvas: Control
 var character_preview: TextureRect
+var character_idle_frames: Array = []
+var character_idle_time: float = 0.0
+var character_idle_frame_index: int = 0
+var character_idle_current_id: String = ""
 var inventory_slot_buttons: Array[Button] = []
 var equipment_buttons: Dictionary = {}
 var tab_buttons: Array[Button] = []
@@ -550,6 +559,8 @@ func _resolve_mission_system() -> void:
 			mission_system.connect("missions_changed", callback)
 
 func _process(delta: float) -> void:
+
+	_process_character_idle_animation(delta)
 
 	_update_drag_preview_from_global_mouse()
 	_refresh_drag_preview_visibility()
@@ -1267,13 +1278,16 @@ func _build_titles() -> void:
 func _build_character_preview() -> void:
 	character_preview = TextureRect.new()
 	character_preview.name = "PersonajeInventario"
-	character_preview.position = Vector2(243, 171)
-	character_preview.size = Vector2(330, 330)
+	# Tamaño reducido para que no tape botones ni slots del panel.
+	character_preview.position = Vector2(294, 201)
+	character_preview.size = Vector2(262, 265)
 	character_preview.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	character_preview.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	character_preview.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	character_preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	character_preview.visible = true
 	menu_canvas.add_child(character_preview)
+	character_preview.z_index = 5
 
 	character_placeholder_label = _create_label(
 		menu_canvas,
@@ -2607,11 +2621,25 @@ func set_character_texture(texture_path: String) -> void:
 	if character_preview == null:
 		return
 
+	_load_character_idle_frames(current_character_id, texture_path)
+	if character_idle_frames.size() > 0:
+		character_idle_frame_index = 0
+		character_idle_time = 0.0
+		character_preview.texture = character_idle_frames[0] as Texture2D
+		character_preview.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		character_preview.visible = true
+		if is_instance_valid(character_placeholder_label):
+			character_placeholder_label.visible = false
+		_bring_inventory_controls_to_front()
+		return
+
 	if texture_path.is_empty() or not ResourceLoader.exists(texture_path):
 		character_preview.texture = null
 		return
 
 	character_preview.texture = load(texture_path) as Texture2D
+	character_preview.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_bring_inventory_controls_to_front()
 
 func set_base_stats(new_stats: Dictionary) -> void:
 	for stat_name in base_stats.keys():
@@ -3185,6 +3213,99 @@ func _save_active_character_to_progress() -> void:
 	config.set_value("jugador", "personaje", current_character_id)
 	config.save(CHARACTER_SAVE_PATH)
 
+
+func _get_character_idle_folder(character_id: String, fallback_texture_path: String = "") -> String:
+	match character_id:
+		"paladin_alba":
+			return "res://Recursos/Personajes/Paladin/Seleccion/Idle"
+		"arquero_bosque":
+			return "res://Recursos/Personajes/Arquero/Seleccion/Idle"
+		"arcanista_estelar":
+			return "res://Recursos/Personajes/Arcanista/Seleccion/Idle"
+		_:
+			if fallback_texture_path.contains("/"):
+				return fallback_texture_path.get_base_dir()
+	return ""
+
+func _load_character_idle_frames(character_id: String, fallback_texture_path: String = "") -> void:
+	character_idle_current_id = character_id
+	character_idle_frames.clear()
+	character_idle_time = 0.0
+	character_idle_frame_index = 0
+
+	var folder: String = _get_character_idle_folder(character_id, fallback_texture_path)
+	if folder.is_empty():
+		return
+
+	var base_prefix: String = ""
+	match character_id:
+		"paladin_alba":
+			base_prefix = "paladin"
+		"arquero_bosque":
+			base_prefix = "arquero"
+		"arcanista_estelar":
+			base_prefix = "arcanista"
+		_:
+			base_prefix = character_id
+
+	var capitalized_prefix: String = base_prefix.capitalize()
+	var naming_sets: Array[Dictionary] = [
+		{"prefix":base_prefix + " idle ", "suffix":".png"},
+		{"prefix":capitalized_prefix + " idle ", "suffix":".png"},
+		{"prefix":base_prefix + "_idle_", "suffix":".png"},
+		{"prefix":capitalized_prefix + "_idle_", "suffix":".png"},
+		{"prefix":base_prefix + "-idle-", "suffix":".png"},
+		{"prefix":capitalized_prefix + "-idle-", "suffix":".png"},
+		{"prefix":"paladin idle ", "suffix":".png"},
+		{"prefix":"Paladin idle ", "suffix":".png"},
+		{"prefix":"Paladin", "suffix":".png"},
+		{"prefix":"idle_", "suffix":".png"},
+		{"prefix":"idle ", "suffix":".png"},
+		{"prefix":"", "suffix":".png"}
+	]
+
+	for naming: Dictionary in naming_sets:
+		for index: int in range(1, character_idle_max_frames + 1):
+			var candidate_path: String = "%s/%s%d%s" % [
+				folder,
+				str(naming.get("prefix", "")),
+				index,
+				str(naming.get("suffix", ".png"))
+			]
+			if ResourceLoader.exists(candidate_path):
+				var texture: Texture2D = load(candidate_path) as Texture2D
+				if texture != null and not character_idle_frames.has(texture):
+					character_idle_frames.append(texture)
+		if character_idle_frames.size() >= 2:
+			break
+
+	if character_idle_frames.is_empty() and not fallback_texture_path.is_empty() and ResourceLoader.exists(fallback_texture_path):
+		var fallback_texture: Texture2D = load(fallback_texture_path) as Texture2D
+		if fallback_texture != null:
+			character_idle_frames.append(fallback_texture)
+
+func _process_character_idle_animation(delta: float) -> void:
+	if not enable_character_idle_animation:
+		return
+	if not inventory_is_open:
+		return
+	if not is_instance_valid(character_preview):
+		return
+	if character_idle_frames.size() <= 1:
+		return
+
+	character_idle_time += delta
+	if character_idle_time < character_idle_frame_seconds:
+		return
+
+	character_idle_time = 0.0
+	character_idle_frame_index = (character_idle_frame_index + 1) % character_idle_frames.size()
+	character_preview.texture = character_idle_frames[character_idle_frame_index]
+	character_preview.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	character_preview.visible = true
+	character_preview.z_index = 5
+	_bring_inventory_controls_to_front()
+
 func _notify_skill_tree_character_state() -> void:
 	var current_scene := get_tree().current_scene
 	if current_scene == null:
@@ -3193,23 +3314,100 @@ func _notify_skill_tree_character_state() -> void:
 	if skill_tree != null and skill_tree.has_method("refresh_character_state"):
 		skill_tree.call_deferred("refresh_character_state")
 
+
+func _bring_inventory_controls_to_front() -> void:
+	# El personaje animado debe quedar por encima del fondo, pero nunca por
+	# encima de botones, slots, pestañas, equipo ni textos. Este refuerzo se
+	# llama al abrir/actualizar/animar para evitar que una textura nueva cambie
+	# el orden visual.
+	if is_instance_valid(character_preview):
+		character_preview.z_index = 5
+
+	var protected_names: Array[String] = [
+		"Campeones",
+		"Tabs",
+		"Equipo",
+		"Objetos",
+		"Materiales",
+		"Misiones",
+		"Habilidades",
+		"Cerrar",
+		"Ordenar",
+		"Equipar",
+		"Usar"
+	]
+
+	if is_instance_valid(menu_canvas):
+		for child: Node in menu_canvas.get_children():
+			if child == character_preview:
+				continue
+			if child is Button or child is Label or child is LineEdit:
+				(child as CanvasItem).z_index = 30
+				(child as CanvasItem).move_to_front()
+				continue
+			if child.name in protected_names and child is CanvasItem:
+				(child as CanvasItem).z_index = 30
+				(child as CanvasItem).move_to_front()
+
+		# Botones y labels anidados dentro de paneles/grids.
+		var stack: Array[Node] = menu_canvas.get_children()
+		while not stack.is_empty():
+			var current: Node = stack.pop_back()
+			for nested: Node in current.get_children():
+				stack.append(nested)
+				if nested == character_preview:
+					continue
+				if nested is Button or nested is Label or nested is LineEdit:
+					(nested as CanvasItem).z_index = 35
+					(nested as CanvasItem).move_to_front()
+
+
+
 func _apply_active_character_visual() -> void:
 	if character_preview == null:
 		return
+
 	var data := _get_character_data(current_character_id)
 	var texture_path := str(data.get("texture", ""))
+
+	# Antes el inventario solo intentaba animar si existía Paladin1.png.
+	# Tus archivos se llaman "paladin idle 1.png", "paladin idle 2.png", etc.,
+	# así que cargamos primero los frames del idle aunque la textura fija no exista.
+	_load_character_idle_frames(current_character_id, texture_path)
+
+	if character_idle_frames.size() > 0:
+		character_texture_path = texture_path
+		character_idle_frame_index = 0
+		character_idle_time = 0.0
+		character_preview.texture = character_idle_frames[0] as Texture2D
+		character_preview.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		character_preview.visible = true
+		if is_instance_valid(character_placeholder_label):
+			character_placeholder_label.visible = false
+		_bring_inventory_controls_to_front()
+		return
+
 	if not texture_path.is_empty() and ResourceLoader.exists(texture_path):
 		character_texture_path = texture_path
 		character_preview.texture = load(texture_path) as Texture2D
+		character_preview.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		character_preview.visible = true
 		if is_instance_valid(character_placeholder_label):
 			character_placeholder_label.visible = false
-	else:
-		character_preview.texture = null
-		if is_instance_valid(character_placeholder_label):
-			character_placeholder_label.visible = true
-			character_placeholder_label.text = str(data.get("short", "PJ")) + "\n" + str(data.get("name_en" if current_language == "en" else "name_es", current_character_id))
-			var accent: Color = data.get("accent", Color("#E9D58A"))
-			character_placeholder_label.add_theme_color_override("font_color", accent)
+		_bring_inventory_controls_to_front()
+		return
+
+	character_preview.texture = null
+	if is_instance_valid(character_placeholder_label):
+		character_placeholder_label.visible = true
+		character_placeholder_label.text = (
+			str(data.get("short", "PJ"))
+			+ "\n"
+			+ str(data.get("name_en" if current_language == "en" else "name_es", current_character_id))
+		)
+		var accent: Color = data.get("accent", Color("#E9D58A"))
+		character_placeholder_label.add_theme_color_override("font_color", accent)
+	_bring_inventory_controls_to_front()
 
 func get_active_character_id() -> String:
 	return current_character_id

@@ -24,6 +24,9 @@ const SETTINGS_PATH: String = "user://opciones.cfg"
 const DRAG_AREA_HEIGHT: float = 68.0
 
 const PALADIN_TEXTURE_PATH: String = "res://Recursos/Personajes/Paladin/Seleccion/Idle/Paladin1.png"
+const PALADIN_IDLE_FOLDER: String = "res://Recursos/Personajes/Paladin/Seleccion/Idle"
+const PALADIN_IDLE_FRAME_SECONDS: float = 0.18
+const PALADIN_IDLE_MAX_FRAMES: int = 24
 
 const FACTION_FRAME_POSITION: Vector2 = Vector2(18.0, 20.0)
 const FACTION_FRAME_SIZE: Vector2 = Vector2(964.0, 560.0)
@@ -344,9 +347,14 @@ var selectable_glows: Array[ColorRect] = []
 var dragging_window: bool = false
 var drag_offset: Vector2i = Vector2i.ZERO
 var transition_locked: bool = false
+var paladin_idle_sprites: Array[Sprite2D] = []
+var paladin_idle_frames: Array = []
+var paladin_idle_time: float = 0.0
+var paladin_idle_frame_index: int = 0
 
 func _ready() -> void:
 	visible = true
+	set_process(true)
 	_connect_game_ui()
 	_load_language_setting()
 	current_mode = _resolve_mode()
@@ -366,6 +374,10 @@ func _ready() -> void:
 
 	_configure_window()
 	_create_interface()
+
+func _process(delta: float) -> void:
+	_process_paladin_idle_animation(delta)
+
 
 func _resolve_mode() -> int:
 	if mode_override == ScreenMode.FACTION:
@@ -1295,6 +1307,63 @@ func _create_card_fades(card: Control) -> void:
 	if card == null:
 		return
 
+
+func _load_paladin_idle_frames() -> Array:
+	if not paladin_idle_frames.is_empty():
+		return paladin_idle_frames
+
+	var naming_sets: Array[Dictionary] = [
+		{"prefix":"paladin idle ", "suffix":".png"},
+		{"prefix":"paladin_idle_", "suffix":".png"},
+		{"prefix":"paladin-idle-", "suffix":".png"},
+		{"prefix":"Paladin", "suffix":".png"},
+		{"prefix":"Paladin_", "suffix":".png"},
+		{"prefix":"idle_", "suffix":".png"},
+		{"prefix":"", "suffix":".png"}
+	]
+
+	for naming: Dictionary in naming_sets:
+		for index: int in range(1, PALADIN_IDLE_MAX_FRAMES + 1):
+			var candidate_path: String = "%s/%s%d%s" % [
+				PALADIN_IDLE_FOLDER,
+				str(naming.get("prefix", "")),
+				index,
+				str(naming.get("suffix", ".png"))
+			]
+			if ResourceLoader.exists(candidate_path):
+				var texture: Texture2D = load(candidate_path) as Texture2D
+				if texture != null and not paladin_idle_frames.has(texture):
+					paladin_idle_frames.append(texture)
+		if paladin_idle_frames.size() >= 2:
+			break
+
+	if paladin_idle_frames.is_empty() and ResourceLoader.exists(PALADIN_TEXTURE_PATH):
+		var fallback_texture: Texture2D = load(PALADIN_TEXTURE_PATH) as Texture2D
+		if fallback_texture != null:
+			paladin_idle_frames.append(fallback_texture)
+
+	return paladin_idle_frames
+
+func _process_paladin_idle_animation(delta: float) -> void:
+	if paladin_idle_sprites.is_empty():
+		return
+
+	var frames: Array = _load_paladin_idle_frames()
+	if frames.size() <= 1:
+		return
+
+	paladin_idle_time += delta
+	if paladin_idle_time < PALADIN_IDLE_FRAME_SECONDS:
+		return
+
+	paladin_idle_time = 0.0
+	paladin_idle_frame_index = (paladin_idle_frame_index + 1) % frames.size()
+
+	for sprite: Sprite2D in paladin_idle_sprites:
+		if is_instance_valid(sprite):
+			sprite.texture = frames[paladin_idle_frame_index]
+			sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+
 func _create_paladin_static_art(portrait_panel: Control) -> void:
 	if not ResourceLoader.exists(PALADIN_TEXTURE_PATH):
 		var missing_label: Label = _create_label(
@@ -1309,13 +1378,13 @@ func _create_paladin_static_art(portrait_panel: Control) -> void:
 		missing_label.add_theme_constant_override("outline_size", 2)
 		return
 
-	var source_texture: Texture2D = load(PALADIN_TEXTURE_PATH) as Texture2D
-	if source_texture == null:
-		push_warning("Paladin1.png existe, pero Godot no pudo cargarlo como Texture2D.")
+	var frames: Array = _load_paladin_idle_frames()
+	if frames.is_empty():
+		push_warning("No se pudieron cargar los frames idle del Paladín.")
 		return
 
-	var final_texture: Texture2D = source_texture
-	var source_image: Image = source_texture.get_image()
+	var final_texture: Texture2D = frames[0]
+	var source_image: Image = final_texture.get_image()
 
 	if source_image != null:
 		var used_rect: Rect2i = source_image.get_used_rect()
@@ -1417,6 +1486,8 @@ func _create_paladin_static_art(portrait_panel: Control) -> void:
 		)
 
 	portrait_panel.add_child(paladin_sprite)
+	if not paladin_idle_sprites.has(paladin_sprite):
+		paladin_idle_sprites.append(paladin_sprite)
 
 func _create_paladin_animation(parent: Control) -> void:
 

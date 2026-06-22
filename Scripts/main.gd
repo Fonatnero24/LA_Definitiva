@@ -65,6 +65,15 @@ const HERO_COMBAT_TEXTURE_PATHS: Dictionary = {
 	"arcanista_estelar": "res://Recursos/Personajes/Arcanista/Seleccion/Idle/Arcanista1.png"
 }
 
+const HERO_IDLE_ANIMATION_FOLDERS: Dictionary = {
+	"paladin_alba": "res://Recursos/Personajes/Paladin/Seleccion/Idle",
+	"arquero_bosque": "res://Recursos/Personajes/Arquero/Seleccion/Idle",
+	"arcanista_estelar": "res://Recursos/Personajes/Arcanista/Seleccion/Idle"
+}
+
+const HERO_IDLE_FRAME_RATE: float = 0.18
+const HERO_IDLE_MAX_FRAMES: int = 24
+
 const HERO_ROSTER_IDS: Array[String] = [
 	"paladin_alba",
 	"arquero_bosque",
@@ -452,6 +461,10 @@ var difficulty_status_label: Label
 var enemy_queue_strip: Control
 
 var party_visual_cards: Dictionary = {}
+var party_visual_portraits: Dictionary = {}
+var hero_idle_frames: Dictionary = {}
+var hero_idle_time: float = 0.0
+var hero_idle_frame_index: int = 0
 var enemy_visual_cards: Array[Panel] = []
 var enemy_visual_labels: Array[Label] = []
 var enemy_visual_hp_bars: Array[Control] = []
@@ -587,6 +600,8 @@ func set_difficulty(mode: String) -> bool:
 	return true
 
 func _process(delta: float) -> void:
+
+	_process_hero_idle_animation(delta)
 
 	if not is_traveling and not combat_active and _alive_enemy_count() > 0:
 		combat_start_watchdog += delta
@@ -2749,6 +2764,7 @@ func _refresh_party_visuals() -> void:
 		_stop_walking_animation()
 	_clear_combat_visual_container(party_strip)
 	party_visual_cards.clear()
+	party_visual_portraits.clear()
 	party_visual_hp_bars.clear()
 	party_visual_shield_bars.clear()
 	party_visual_hp_labels.clear()
@@ -2779,6 +2795,7 @@ func _refresh_party_visuals() -> void:
 		var full_name: String = str(profile.get("name_en" if current_language == "en" else "name_es", hero_id))
 		card.tooltip_text = "%s · %s %d" % [full_name, "Level" if current_language == "en" else "Nivel", level]
 		party_visual_cards[hero_id] = card
+		party_visual_portraits[hero_id] = card_data.get("portrait")
 		party_visual_hp_bars[hero_id] = card_data.get("hp_bar")
 		party_visual_shield_bars[hero_id] = card_data.get("shield_bar")
 		party_visual_hp_labels[hero_id] = card_data.get("hp_label")
@@ -2929,7 +2946,18 @@ func _create_combatant_card(
 	var status_label: Label = _create_label(card, "", Vector2(1.0, card.size.y - 11.0), Vector2(card.size.x - 2.0, 10.0), 7 if card.size.x >= 70.0 else 6, HORIZONTAL_ALIGNMENT_CENTER, Color("#FFF0A0"))
 	status_label.name = "EstadosCompactos"
 	status_label.add_theme_constant_override("outline_size", 2)
-	return {"card":card, "label":label, "hp_bar":hp_bar, "shield_bar":shield_bar, "hp_label":hp_label, "status_label":status_label}
+	if is_hero:
+		card.set_meta("hero_id", _hero_id_from_texture_path(texture_path))
+		portrait.set_meta("hero_id", _hero_id_from_texture_path(texture_path))
+
+	return {"card":card, "label":label, "hp_bar":hp_bar, "shield_bar":shield_bar, "hp_label":hp_label, "status_label":status_label, "portrait":portrait}
+
+func _hero_id_from_texture_path(texture_path: String) -> String:
+	for hero_id: String in HERO_COMBAT_TEXTURE_PATHS.keys():
+		if str(HERO_COMBAT_TEXTURE_PATHS.get(hero_id, "")) == texture_path:
+			return hero_id
+	return ""
+
 func _create_compact_pill_bar(parent: Control, bar_position: Vector2, bar_size: Vector2, fill_color: Color) -> Panel:
 	var bar: Panel = Panel.new()
 	bar.position = bar_position
@@ -3054,6 +3082,76 @@ func _hero_short_name(hero_id: String) -> String:
 			return "ARC"
 		_:
 			return "PAL"
+
+
+func _get_hero_idle_frames(hero_id: String) -> Array:
+	if hero_idle_frames.has(hero_id):
+		return hero_idle_frames.get(hero_id, []) as Array
+
+	var frames: Array = []
+	var folder: String = str(HERO_IDLE_ANIMATION_FOLDERS.get(hero_id, ""))
+	if folder.is_empty():
+		hero_idle_frames[hero_id] = frames
+		return frames
+
+	var naming_sets: Array[Dictionary] = [
+		{"prefix":"paladin idle ", "suffix":".png"},
+		{"prefix":"paladin_idle_", "suffix":".png"},
+		{"prefix":"paladin-idle-", "suffix":".png"},
+		{"prefix":"Paladin", "suffix":".png"},
+		{"prefix":"Paladin_", "suffix":".png"},
+		{"prefix":"idle_", "suffix":".png"},
+		{"prefix":"", "suffix":".png"}
+	]
+
+	for naming: Dictionary in naming_sets:
+		for index: int in range(1, HERO_IDLE_MAX_FRAMES + 1):
+			var candidate_path: String = "%s/%s%d%s" % [
+				folder,
+				str(naming.get("prefix", "")),
+				index,
+				str(naming.get("suffix", ".png"))
+			]
+			if ResourceLoader.exists(candidate_path):
+				var texture: Texture2D = load(candidate_path) as Texture2D
+				if texture != null and not frames.has(texture):
+					frames.append(texture)
+		if frames.size() >= 2:
+			break
+
+	if frames.is_empty():
+		var fallback_path: String = _get_hero_combat_texture_path(hero_id)
+		if not fallback_path.is_empty() and ResourceLoader.exists(fallback_path):
+			var fallback_texture: Texture2D = load(fallback_path) as Texture2D
+			if fallback_texture != null:
+				frames.append(fallback_texture)
+
+	hero_idle_frames[hero_id] = frames
+	return frames
+
+func _process_hero_idle_animation(delta: float) -> void:
+	if party_visual_portraits.is_empty():
+		return
+
+	hero_idle_time += delta
+	if hero_idle_time < HERO_IDLE_FRAME_RATE:
+		return
+
+	hero_idle_time = 0.0
+	hero_idle_frame_index += 1
+
+	for hero_id_variant: Variant in party_visual_portraits.keys():
+		var hero_id: String = str(hero_id_variant)
+		var portrait: TextureRect = party_visual_portraits.get(hero_id) as TextureRect
+		if not is_instance_valid(portrait):
+			continue
+
+		var frames: Array = _get_hero_idle_frames(hero_id)
+		if frames.is_empty():
+			continue
+
+		portrait.texture = frames[hero_idle_frame_index % frames.size()]
+		portrait.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 
 func _get_hero_combat_texture_path(hero_id: String) -> String:
 	return str(HERO_COMBAT_TEXTURE_PATHS.get(hero_id, ""))
