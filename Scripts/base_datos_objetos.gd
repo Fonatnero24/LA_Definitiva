@@ -396,8 +396,8 @@ const OBJETOS: Array = [
 	{"id":"amuleto_cobre","name":"Amuleto de Cobre","description":"Aleja una pequeña parte de la mala fortuna.","rarity":RAREZA_COMUN,"category":"equipo","equip_slot":"amuleto","min_level":1,"base_stats":{"vida":4,"magia":1}},
 	{"id":"pocion_menor","name":"Poción Menor de Vida","description":"Recupera una pequeña cantidad de vida.","rarity":RAREZA_COMUN,"category":"objetos","equip_slot":"","min_level":1,"stackable":true,"consumable":true,"quantity_min":1,"quantity_max":3,"effect":{"heal":25},"base_stats":{}},
 	{"id":"fragmento_hierro","name":"Fragmento de Hierro","description":"Material común de herrería.","rarity":RAREZA_COMUN,"category":"materiales","equip_slot":"","min_level":1,"stackable":true,"quantity_min":1,"quantity_max":4,"base_stats":{}},
-
 	{"id":"sable_explorador","name":"Sable del Explorador","description":"Equilibrado para largas expediciones.","rarity":RAREZA_POCO_COMUN,"category":"equipo","equip_slot":"arma","min_level":3,"base_stats":{"daño":6,"vel":1}},
+	
 	{"id":"yelmo_guardabosques","name":"Yelmo del Guardabosques","description":"Ligero y reforzado con hojas de acero.","rarity":RAREZA_POCO_COMUN,"category":"equipo","equip_slot":"casco","min_level":3,"base_stats":{"vida":7,"def":4}},
 	{"id":"malla_valdoria","zones":[ZONA_VALDORIA],"name":"Malla de Valdoria","description":"Anillas templadas en los hornos de la región.","rarity":RAREZA_POCO_COMUN,"category":"equipo","equip_slot":"armadura","min_level":4,"base_stats":{"vida":13,"def":6}},
 	{"id":"botas_rastreador","name":"Botas del Rastreador","description":"Silenciosas sobre tierra y piedra.","rarity":RAREZA_POCO_COMUN,"category":"equipo","equip_slot":"botas","min_level":4,"base_stats":{"vel":4,"def":1}},
